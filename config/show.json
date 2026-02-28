@@ -1,0 +1,17 @@
+{
+    "console_type": "x32",
+    "console_ip": "192.168.1.100",
+    "console_port": 10023,
+
+    "dsp_interval_ms": 50,
+    "llm_interval_ms": 5000,
+    "meter_refresh_ms": 50,
+
+    "approval_mode": "auto_urgent",
+    "headless": false,
+
+    "llm_temperature": 0.3,
+    "llm_max_tokens": 1024,
+
+    "notes": "Drop your console IP above and your API key in .env"
+}

@@ -1,0 +1,15 @@
+{
+    "console_type": "avantis",
+    "console_ip": "192.168.1.102",
+    "console_port": 51325,
+
+    "dsp_interval_ms": 50,
+    "llm_interval_ms": 5000,
+    "meter_refresh_ms": 50,
+
+    "approval_mode": "auto_urgent",
+    "headless": false,
+
+    "llm_temperature": 0.3,
+    "llm_max_tokens": 1024
+}
