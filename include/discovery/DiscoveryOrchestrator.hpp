@@ -13,6 +13,7 @@
 #include <thread>
 #include <chrono>
 #include <optional>
+#include <functional>
 
 class DiscoveryOrchestrator {
     IConsoleAdapter&   adapter_;
@@ -24,9 +25,40 @@ class DiscoveryOrchestrator {
     LLMDecisionEngine& llm_;
 
 public:
+    // Callback to ask the engineer to clarify an unidentified channel.
+    // The orchestrator provides a human-readable question; the UI should
+    // display it via the chat panel. When the engineer responds, call
+    // handleClarification() with the channel and their answer.
+    std::function<void(int channel, const std::string& question)>
+        onClarificationNeeded;
+
     DiscoveryOrchestrator(IConsoleAdapter& a, ConsoleModel& m,
                           DynamicChannelMap& cm, LLMDecisionEngine& llm)
         : adapter_(a), model_(m), channelMap_(cm), llm_(llm) {}
+
+    // Called when the engineer responds to a clarification request.
+    void handleClarification(int channel, const std::string& answer) {
+        auto result = nameClassifier_.classify(answer);
+        auto profile = channelMap_.getProfile(channel);
+        if (result.role != InstrumentRole::Unknown) {
+            profile.consoleName = answer;
+            profile.role        = result.role;
+            profile.group       = result.group;
+            profile.confidence  = DiscoveryConfidence::High;
+            profile.manuallyOverridden = true;
+            profile.lastUpdated = std::chrono::steady_clock::now();
+            channelMap_.updateProfile(profile);
+            spdlog::info("ch{} clarified by engineer: {} ({})",
+                         channel, answer, roleToString(result.role));
+        } else {
+            // If classification still fails, set the name and mark as manual
+            profile.consoleName = answer;
+            profile.manuallyOverridden = true;
+            profile.lastUpdated = std::chrono::steady_clock::now();
+            channelMap_.updateProfile(profile);
+            spdlog::info("ch{} labeled by engineer: '{}'", channel, answer);
+        }
+    }
 
     void run() {
         auto caps = adapter_.capabilities();
@@ -102,7 +134,24 @@ public:
         spdlog::info("=== Discovery Complete (local) ===");
         logChannelMap();
 
-        // 9. LLM review pass (async — don't block the show)
+        // 9. Ask engineer about unidentified channels with signal
+        if (onClarificationNeeded) {
+            for (auto& p : profiles) {
+                if (p.fingerprint.hasSignal &&
+                    p.role == InstrumentRole::Unknown &&
+                    p.confidence <= DiscoveryConfidence::Low) {
+                    std::string question =
+                        "ch" + std::to_string(p.index);
+                    if (!p.consoleName.empty())
+                        question += " ('" + p.consoleName + "')";
+                    question += " has signal but I can't identify it. "
+                                "What instrument is on this channel?";
+                    onClarificationNeeded(p.index, question);
+                }
+            }
+        }
+
+        // 10. LLM review pass (async — don't block the show)
         std::thread([this, profiles]() mutable {
             spdlog::info("Starting LLM discovery review...");
             try {

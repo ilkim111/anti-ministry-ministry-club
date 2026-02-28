@@ -2,6 +2,8 @@
 #include "console/X32Adapter.hpp"
 #include "console/WingAdapter.hpp"
 #include "console/AvantisAdapter.hpp"
+#include "audio/PortAudioCapture.hpp"
+#include "audio/NullAudioCapture.hpp"
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -141,6 +143,12 @@ int main(int argc, char* argv[]) {
     agentConfig.meterRefreshMs = config.value("meter_refresh_ms", 50);
     agentConfig.headless       = config.value("headless", false);
 
+    // Audio capture config
+    agentConfig.audioChannels   = config.value("audio_channels", 0);
+    agentConfig.audioDeviceId   = config.value("audio_device_id", -1);
+    agentConfig.audioSampleRate = config.value("audio_sample_rate", 48000.0);
+    agentConfig.audioFFTSize    = config.value("audio_fft_size", 1024);
+
     std::string approvalMode = config.value("approval_mode", "auto_urgent");
     if (approvalMode == "approve_all")
         agentConfig.approvalMode = ApprovalQueue::Mode::ApproveAll;
@@ -158,6 +166,18 @@ int main(int argc, char* argv[]) {
     // Create and start agent
     g_agent = std::make_unique<SoundEngineerAgent>(
         *adapter, llmConfig, agentConfig);
+
+    // Setup audio capture if configured
+    if (agentConfig.audioChannels > 0) {
+        auto capture = std::make_unique<PortAudioCapture>();
+        // List available devices for user reference
+        auto devices = capture->listDevices();
+        for (auto& d : devices) {
+            spdlog::info("  Audio device [{}]: {} ({} inputs, {}Hz)",
+                         d.id, d.name, d.maxInputChannels, d.defaultSampleRate);
+        }
+        g_agent->setAudioCapture(std::move(capture));
+    }
 
     if (!g_agent->start()) {
         spdlog::error("Failed to start agent");

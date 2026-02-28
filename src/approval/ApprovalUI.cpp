@@ -30,12 +30,17 @@ void ApprovalUI::setStatus(const std::string& status) {
     status_ = status;
 }
 
+void ApprovalUI::updateConnectionStatus(const ConnectionStatus& status) {
+    std::lock_guard lock(connMtx_);
+    connStatus_ = status;
+}
+
 void ApprovalUI::stop() {
     running_ = false;
 }
 
 void ApprovalUI::render() {
-    // Single frame render for non-interactive / headless mode — unchanged
+    // Single frame render for non-interactive / headless mode
     auto pending = queue_.pending();
     auto screen = Screen::Create(Dimension::Full(), Dimension::Full());
 
@@ -106,6 +111,36 @@ void ApprovalUI::run() {
 
     auto renderer = Renderer([&] {
         auto pending = queue_.pending();
+
+        // ── Connection Status Bar ──────────────────────────────────
+        ConnectionStatus cs;
+        {
+            std::lock_guard lock(connMtx_);
+            cs = connStatus_;
+        }
+
+        auto statusDot = [](bool connected) {
+            return connected
+                ? text(" * ") | color(Color::Green) | bold
+                : text(" * ") | color(Color::Red) | bold;
+        };
+
+        auto connBar = hbox({
+            statusDot(cs.oscConnected),
+            text("OSC") | (cs.oscConnected ? color(Color::Green) : color(Color::Red)),
+            text(" " + cs.consoleType) | dim,
+            text("  "),
+            statusDot(cs.audioConnected),
+            text("Audio") | (cs.audioConnected ? color(Color::Green) : color(Color::Red)),
+            cs.audioConnected
+                ? text(" " + cs.audioBackend + " " +
+                       std::to_string(cs.audioChannels) + "ch/" +
+                       std::to_string((int)cs.audioSampleRate) + "Hz") | dim
+                : text(" off") | dim,
+            text("  "),
+            statusDot(cs.llmConnected),
+            text("LLM") | (cs.llmConnected ? color(Color::Green) : color(Color::Red)),
+        });
 
         // ── Header ────────────────────────────────────────────────
         std::string modeStr = (uiMode_ == UIMode::Chat) ? "CHAT" : "QUEUE";
@@ -199,8 +234,9 @@ void ApprovalUI::run() {
             }) | borderLight;
         }
 
-        // ── Layout: left (queue + activity), right (chat) ─────────
+        // ── Layout: connection bar + left (queue + activity) + right (chat)
         return vbox({
+            connBar | borderLight,
             header,
             separator(),
             hbox({

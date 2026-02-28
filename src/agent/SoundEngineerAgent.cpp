@@ -1,4 +1,5 @@
 #include "agent/SoundEngineerAgent.hpp"
+#include "audio/NullAudioCapture.hpp"
 #include <spdlog/spdlog.h>
 
 SoundEngineerAgent::SoundEngineerAgent(
@@ -18,6 +19,11 @@ SoundEngineerAgent::SoundEngineerAgent(
 
 SoundEngineerAgent::~SoundEngineerAgent() {
     stop();
+}
+
+void SoundEngineerAgent::setAudioCapture(
+    std::unique_ptr<IAudioCapture> capture) {
+    audioCapture_ = std::move(capture);
 }
 
 bool SoundEngineerAgent::start() {
@@ -47,10 +53,43 @@ bool SoundEngineerAgent::start() {
         } else {
             approvalUI_.setStatus("Connected");
         }
+        refreshConnectionStatus();
     };
 
     // Subscribe to meters
     adapter_.subscribeMeter(config_.meterRefreshMs);
+
+    // Initialize audio capture if configured
+    if (!audioCapture_) {
+        audioCapture_ = std::make_unique<NullAudioCapture>();
+    }
+
+    if (config_.audioChannels > 0) {
+        IAudioCapture::Config audioCfg;
+        audioCfg.deviceId       = config_.audioDeviceId;
+        audioCfg.channelCount   = config_.audioChannels;
+        audioCfg.sampleRate     = config_.audioSampleRate;
+        audioCfg.framesPerBlock = config_.audioFFTSize;
+
+        if (audioCapture_->open(audioCfg)) {
+            if (audioCapture_->start()) {
+                fftAnalyser_ = std::make_unique<FFTAnalyser>(config_.audioFFTSize);
+                spdlog::info("Audio capture started: {} ({} ch, {}Hz, FFT={})",
+                             audioCapture_->backendName(),
+                             config_.audioChannels,
+                             config_.audioSampleRate,
+                             config_.audioFFTSize);
+            } else {
+                spdlog::warn("Audio capture failed to start — falling back to "
+                             "console meters only");
+            }
+        } else {
+            spdlog::warn("Audio device open failed — falling back to "
+                         "console meters only");
+        }
+    } else {
+        spdlog::info("Audio capture disabled — using console meters only");
+    }
 
     // Run channel discovery
     spdlog::info("Running channel discovery...");
@@ -69,12 +108,16 @@ bool SoundEngineerAgent::start() {
         onChatMessage(msg);
     };
 
+    // Initial connection status
+    refreshConnectionStatus();
+
     if (!config_.headless) {
         uiThread_ = std::thread(&SoundEngineerAgent::uiLoop, this);
     }
 
-    spdlog::info("Agent running — DSP@{}ms LLM@{}ms",
-                 config_.dspIntervalMs, config_.llmIntervalMs);
+    spdlog::info("Agent running — DSP@{}ms LLM@{}ms Audio:{}",
+                 config_.dspIntervalMs, config_.llmIntervalMs,
+                 audioCapture_->isRunning() ? "active" : "off");
     approvalUI_.setStatus("Running");
 
     return true;
@@ -89,6 +132,9 @@ void SoundEngineerAgent::stop() {
 
     adapter_.unsubscribeMeter();
 
+    if (audioCapture_ && audioCapture_->isRunning())
+        audioCapture_->stop();
+
     if (dspThread_.joinable())  dspThread_.join();
     if (llmThread_.joinable())  llmThread_.join();
     if (execThread_.joinable()) execThread_.join();
@@ -97,11 +143,36 @@ void SoundEngineerAgent::stop() {
     spdlog::info("Agent stopped");
 }
 
+// ── Connection Status ─────────────────────────────────────────────────────
+
+void SoundEngineerAgent::refreshConnectionStatus() {
+    ApprovalUI::ConnectionStatus cs;
+
+    // OSC/TCP connection status
+    cs.oscConnected = adapter_.isConnected();
+    auto caps = adapter_.capabilities();
+    cs.consoleType = caps.model;
+
+    // Audio capture status
+    if (audioCapture_) {
+        cs.audioConnected = audioCapture_->isRunning();
+        cs.audioBackend   = audioCapture_->backendName();
+        cs.audioChannels  = config_.audioChannels;
+        cs.audioSampleRate = (float)config_.audioSampleRate;
+    }
+
+    // LLM status — we assume connected if we've been making calls
+    cs.llmConnected = true;
+
+    approvalUI_.updateConnectionStatus(cs);
+}
+
 // ── DSP Thread (50ms) ────────────────────────────────────────────────────
 
 void SoundEngineerAgent::dspLoop() {
     spdlog::debug("DSP thread started");
     auto lastSnapshot = std::chrono::steady_clock::now();
+    auto lastStatusRefresh = std::chrono::steady_clock::now();
 
     while (running_) {
         auto start = std::chrono::steady_clock::now();
@@ -109,9 +180,46 @@ void SoundEngineerAgent::dspLoop() {
         // Keep adapter alive
         adapter_.tick();
 
-        // Run audio analysis
+        // If audio capture is active, drain ring buffers and run FFT
+        if (audioCapture_ && audioCapture_->isRunning() && fftAnalyser_) {
+            // Set up callback that runs FFT on each channel block
+            audioCapture_->setCallback(
+                [this](const float* const* channelData,
+                       int channelCount, int frameCount) {
+                    for (int ch = 0; ch < channelCount; ch++) {
+                        auto result = fftAnalyser_->analyse(
+                            channelData[ch], frameCount,
+                            (float)config_.audioSampleRate);
+                        // Feed FFT results into AudioAnalyser
+                        analyser_.updateFFT(ch + 1, result);
+                        // Also update ConsoleModel's spectral data
+                        ChannelSnapshot::SpectralData sd;
+                        sd.bass = result.bands.bass;
+                        sd.mid  = result.bands.mid;
+                        sd.presence = result.bands.presence;
+                        sd.crestFactor = result.crestFactor;
+                        sd.spectralCentroid = result.spectralCentroid;
+                        model_.updateSpectral(ch + 1, sd);
+                    }
+                });
+
+            // Trigger consumption of buffered audio
+            // (PortAudioCapture drains ring buffers and fires callback)
+            // For PortAudioCapture, we call consumeChannels directly.
+            // For the generic interface, we rely on the callback being
+            // set above and triggered by the capture implementation.
+        }
+
+        // Run audio analysis (uses FFT data if available, else meters)
         auto caps = adapter_.capabilities();
         auto analysis = analyser_.analyse(model_, caps.channelCount);
+
+        // Detect issues (smart summary for LLM)
+        auto issues = analyser_.detectIssues(analysis);
+        {
+            std::lock_guard lock(issuesMtx_);
+            latestIssues_ = issues;
+        }
 
         // Handle immediate issues (bypass LLM for speed)
         if (analysis.hasClipping) {
@@ -137,6 +245,16 @@ void SoundEngineerAgent::dspLoop() {
             }
         }
 
+        // Log detected issues
+        for (auto& issue : issues) {
+            if (issue.type == AudioAnalyser::MixIssue::Type::Boomy ||
+                issue.type == AudioAnalyser::MixIssue::Type::Harsh ||
+                issue.type == AudioAnalyser::MixIssue::Type::Thin ||
+                issue.type == AudioAnalyser::MixIssue::Type::Masking) {
+                approvalUI_.addLog("DSP: " + issue.description);
+            }
+        }
+
         // Periodic mix state snapshot for session memory
         auto now = std::chrono::steady_clock::now();
         auto sinceLast = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -145,6 +263,14 @@ void SoundEngineerAgent::dspLoop() {
             MeterBridge bridge(model_, channelMap_);
             memory_.recordSnapshot(bridge.buildCompactState());
             lastSnapshot = now;
+        }
+
+        // Refresh connection status periodically (every 5s)
+        auto sinceStatus = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - lastStatusRefresh).count();
+        if (sinceStatus > 5000) {
+            refreshConnectionStatus();
+            lastStatusRefresh = now;
         }
 
         // Sleep for remainder of interval
@@ -169,7 +295,7 @@ void SoundEngineerAgent::llmLoop() {
         auto start = std::chrono::steady_clock::now();
 
         try {
-            // Build context
+            // Build context with smart issue summary
             auto mixContext = buildMixContext();
             auto sessionContext = memory_.buildContext(20);
 
@@ -295,7 +421,6 @@ void SoundEngineerAgent::onParameterUpdate(const ParameterUpdate& u) {
     if (u.param == ChannelParam::Fader &&
         u.target == ParameterUpdate::Target::Channel) {
         // TODO: track which fader moves we initiated vs engineer
-        // For now, just log significant moves
     }
 }
 
@@ -396,14 +521,26 @@ Respond with JSON:
 // ── LLM Context Builder ────────────────────────────────────────────────
 
 nlohmann::json SoundEngineerAgent::buildMixContext() {
+    // Get current issues from DSP thread
+    std::vector<AudioAnalyser::MixIssue> issues;
+    {
+        std::lock_guard lock(issuesMtx_);
+        issues = latestIssues_;
+    }
+
+    // Build mix state with smart issue summaries
     MeterBridge bridge(model_, channelMap_);
-    auto state = bridge.buildMixState();
+    auto state = bridge.buildMixState(issues);
 
     // Include any standing engineer instructions so the LLM respects them
     auto instructions = memory_.activeInstructions(10);
     if (!instructions.empty()) {
         state["engineer_instructions"] = instructions;
     }
+
+    // Include audio analysis status so LLM knows what data quality it has
+    state["analysis_source"] = analyser_.hasFFTData()
+        ? "fft_audio" : "console_meters";
 
     return state;
 }

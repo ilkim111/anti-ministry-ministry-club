@@ -1,19 +1,28 @@
 #pragma once
 #include "console/ConsoleModel.hpp"
 #include "discovery/DynamicChannelMap.hpp"
+#include "AudioAnalyser.hpp"
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <string>
 
 // Builds JSON snapshots of the current mix state for LLM consumption.
-// This is the bridge between raw meter data and structured LLM context.
+// This is the bridge between raw meter/spectral data and structured LLM context.
+//
+// Key design principle: the LLM never sees raw spectral data.
+// The AudioAnalyser does the heavy DSP work locally, and this class
+// only includes concise, actionable summaries in the JSON.
 class MeterBridge {
 public:
     MeterBridge(const ConsoleModel& model, const DynamicChannelMap& channelMap)
         : model_(model), channelMap_(channelMap) {}
 
-    // Build full mix state JSON for LLM decision engine
-    nlohmann::json buildMixState() const {
+    // Build full mix state JSON for LLM decision engine.
+    // If issues are provided (from AudioAnalyser::detectIssues), they are
+    // included as a compact "issues" array — this is the smart summary.
+    nlohmann::json buildMixState(
+        const std::vector<AudioAnalyser::MixIssue>& issues = {}) const
+    {
         nlohmann::json state;
         state["channels"] = nlohmann::json::array();
 
@@ -28,9 +37,9 @@ public:
                 {"name",        profile.consoleName},
                 {"role",        roleToString(profile.role)},
                 {"group",       profile.group},
-                {"fader",       snap.fader},
+                {"fader",       roundTo(snap.fader, 2)},
                 {"muted",       snap.muted},
-                {"pan",         snap.pan},
+                {"pan",         roundTo(snap.pan, 2)},
                 {"rms_db",      roundTo(snap.rmsDB, 1)},
                 {"peak_db",     roundTo(snap.peakDB, 1)},
                 {"has_signal",  snap.rmsDB > -60.0f}
@@ -82,6 +91,25 @@ public:
             state["channels"].push_back(ch);
         }
 
+        // Smart issue summary — concise actionable items from DSP analysis.
+        // This is the key token-efficient approach: the FFT runs locally,
+        // and only the conclusions reach the LLM.
+        if (!issues.empty()) {
+            state["issues"] = nlohmann::json::array();
+            for (auto& issue : issues) {
+                nlohmann::json ij;
+                ij["type"] = issueTypeToString(issue.type);
+                ij["channel"] = issue.channel;
+                if (issue.channel2 > 0)
+                    ij["channel2"] = issue.channel2;
+                if (issue.freqHz > 0)
+                    ij["freq_hz"] = (int)issue.freqHz;
+                ij["severity"] = roundTo(issue.severity, 2);
+                ij["description"] = issue.description;
+                state["issues"].push_back(ij);
+            }
+        }
+
         return state;
     }
 
@@ -105,6 +133,20 @@ public:
     }
 
 private:
+    static std::string issueTypeToString(AudioAnalyser::MixIssue::Type t) {
+        switch (t) {
+            case AudioAnalyser::MixIssue::Type::Clipping:     return "clipping";
+            case AudioAnalyser::MixIssue::Type::FeedbackRisk: return "feedback_risk";
+            case AudioAnalyser::MixIssue::Type::Masking:      return "masking";
+            case AudioAnalyser::MixIssue::Type::Boomy:        return "boomy";
+            case AudioAnalyser::MixIssue::Type::Harsh:        return "harsh";
+            case AudioAnalyser::MixIssue::Type::Thin:         return "thin";
+            case AudioAnalyser::MixIssue::Type::Muddy:        return "muddy";
+            case AudioAnalyser::MixIssue::Type::NoHeadroom:   return "no_headroom";
+        }
+        return "unknown";
+    }
+
     static float roundTo(float val, int decimals) {
         float mult = std::pow(10.0f, decimals);
         return std::round(val * mult) / mult;

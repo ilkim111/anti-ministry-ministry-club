@@ -37,6 +37,25 @@ FetchContent_MakeAvailable(ftxui nlohmann_json httplib spdlog)
 # Find system packages
 find_package(Threads REQUIRED)
 
+# Optional: PortAudio for audio capture (ASIO/CoreAudio/ALSA)
+option(ENABLE_PORTAUDIO "Enable audio capture via PortAudio" OFF)
+if(ENABLE_PORTAUDIO)
+    find_package(PkgConfig)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(PORTAUDIO portaudio-2.0)
+    endif()
+    if(NOT PORTAUDIO_FOUND)
+        find_library(PORTAUDIO_LIBRARIES NAMES portaudio)
+        find_path(PORTAUDIO_INCLUDE_DIRS portaudio.h)
+    endif()
+    if(PORTAUDIO_LIBRARIES)
+        message(STATUS "PortAudio found: ${PORTAUDIO_LIBRARIES}")
+        add_compile_definitions(HAS_PORTAUDIO)
+    else()
+        message(WARNING "PortAudio not found — audio capture will be disabled")
+    endif()
+endif()
+
 # Source files
 file(GLOB_RECURSE SOURCES src/*.cpp)
 
@@ -55,6 +74,11 @@ target_link_libraries(mixagent PRIVATE
     spdlog::spdlog
     Threads::Threads
 )
+
+if(ENABLE_PORTAUDIO AND PORTAUDIO_LIBRARIES)
+    target_include_directories(mixagent PRIVATE ${PORTAUDIO_INCLUDE_DIRS})
+    target_link_libraries(mixagent PRIVATE ${PORTAUDIO_LIBRARIES})
+endif()
 
 # Tests
 option(BUILD_TESTS "Build tests" OFF)
@@ -86,6 +110,12 @@ if(BUILD_TESTS)
         spdlog::spdlog
         Threads::Threads
     )
+
+    if(ENABLE_PORTAUDIO AND PORTAUDIO_LIBRARIES)
+        target_include_directories(mixagent_tests PRIVATE ${PORTAUDIO_INCLUDE_DIRS})
+        target_link_libraries(mixagent_tests PRIVATE ${PORTAUDIO_LIBRARIES})
+    endif()
+
     include(GoogleTest)
     gtest_discover_tests(mixagent_tests)
 endif()

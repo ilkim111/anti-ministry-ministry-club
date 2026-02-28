@@ -15,5 +15,10 @@
 
     "ollama_primary": false,
 
-    "notes": "Set ollama_primary to true for fully local operation (no API key needed). Drop your console IP above and your API key in .env"
+    "audio_channels": 0,
+    "audio_device_id": -1,
+    "audio_sample_rate": 48000,
+    "audio_fft_size": 1024,
+
+    "notes": "Set audio_channels > 0 to enable audio capture (via ASIO/CoreAudio/Dante). Set -1 for default device or specify audio_device_id from the startup device list."
 }

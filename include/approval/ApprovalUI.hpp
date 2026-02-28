@@ -6,7 +6,8 @@
 #include <mutex>
 
 // Terminal UI for displaying and interacting with the approval queue.
-// Uses ftxui for rendering. Includes a chat input bar for engineer feedback.
+// Uses ftxui for rendering. Includes a chat input bar for engineer feedback
+// and connection status indicators for console and audio streams.
 class ApprovalUI {
 public:
     explicit ApprovalUI(ApprovalQueue& queue);
@@ -33,6 +34,19 @@ public:
     // Update status line
     void setStatus(const std::string& status);
 
+    // Connection status indicators
+    struct ConnectionStatus {
+        bool  oscConnected   = false;  // Console OSC/TCP connection
+        bool  audioConnected = false;  // Audio capture stream active
+        bool  llmConnected   = false;  // LLM backend reachable
+        std::string consoleType;       // "X32", "Wing", "Avantis"
+        std::string audioBackend;      // "PortAudio (ASIO)", "null", etc.
+        int   audioChannels  = 0;
+        float audioSampleRate = 0;
+    };
+
+    void updateConnectionStatus(const ConnectionStatus& status);
+
 private:
     ApprovalQueue& queue_;
     bool running_ = false;
@@ -44,6 +58,10 @@ private:
     std::vector<std::string> chatHistory_;
     static constexpr int maxChatHistory_ = 100;
     std::mutex chatMtx_;
+
+    // Connection status
+    ConnectionStatus connStatus_;
+    std::mutex connMtx_;
 
     enum class UIMode {
         Approval,   // navigating the approval queue (default)
