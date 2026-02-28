@@ -118,11 +118,20 @@ int main(int argc, char* argv[]) {
     llmConfig.ollamaModel     = getEnv("MIXAGENT_FALLBACK_MODEL",
                                         "llama3:8b");
     llmConfig.useFallback     = !llmConfig.ollamaHost.empty();
+    llmConfig.ollamaPrimary   = config.value("ollama_primary", false);
     llmConfig.temperature     = config.value("llm_temperature", 0.3f);
     llmConfig.maxTokens       = config.value("llm_max_tokens", 1024);
 
+    // Auto-detect: if no API key, switch to Ollama-primary
     if (llmConfig.anthropicApiKey.empty()) {
-        spdlog::warn("No ANTHROPIC_API_KEY set — will use Ollama only");
+        llmConfig.ollamaPrimary = true;
+        spdlog::info("No ANTHROPIC_API_KEY set — using Ollama as primary LLM");
+    }
+
+    if (llmConfig.ollamaPrimary) {
+        spdlog::info("LLM mode: Ollama-primary ({})", llmConfig.ollamaModel);
+    } else {
+        spdlog::info("LLM mode: Anthropic-primary ({})", llmConfig.anthropicModel);
     }
 
     // Agent config

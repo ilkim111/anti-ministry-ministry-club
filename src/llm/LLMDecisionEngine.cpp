@@ -32,23 +32,41 @@ std::string LLMDecisionEngine::callRaw(const std::string& systemPrompt,
     std::string response;
     bool success = false;
 
-    // Try Anthropic first
-    if (!config_.anthropicApiKey.empty()) {
-        try {
-            response = callAnthropic(systemPrompt, userMessage);
-            success = true;
-        } catch (const std::exception& e) {
-            spdlog::warn("Anthropic call failed: {}", e.what());
-        }
-    }
-
-    // Fall back to Ollama
-    if (!success && config_.useFallback) {
+    if (config_.ollamaPrimary) {
+        // Ollama-primary mode: try Ollama first, fall back to Anthropic
         try {
             response = callOllama(systemPrompt, userMessage);
             success = true;
         } catch (const std::exception& e) {
-            spdlog::error("Ollama fallback also failed: {}", e.what());
+            spdlog::warn("Ollama call failed: {}", e.what());
+        }
+
+        if (!success && !config_.anthropicApiKey.empty()) {
+            try {
+                response = callAnthropic(systemPrompt, userMessage);
+                success = true;
+            } catch (const std::exception& e) {
+                spdlog::error("Anthropic fallback also failed: {}", e.what());
+            }
+        }
+    } else {
+        // Default: try Anthropic first, fall back to Ollama
+        if (!config_.anthropicApiKey.empty()) {
+            try {
+                response = callAnthropic(systemPrompt, userMessage);
+                success = true;
+            } catch (const std::exception& e) {
+                spdlog::warn("Anthropic call failed: {}", e.what());
+            }
+        }
+
+        if (!success && config_.useFallback) {
+            try {
+                response = callOllama(systemPrompt, userMessage);
+                success = true;
+            } catch (const std::exception& e) {
+                spdlog::error("Ollama fallback also failed: {}", e.what());
+            }
         }
     }
 
@@ -160,6 +178,10 @@ RULES:
 - If something sounds fine, respond with no_action
 - Kick and bass should not mask each other — use HPF separation or EQ notching
 - Be conservative — small changes that compound over time
+- CRITICAL: If "engineer_instructions" are present in the mix state, those are
+  direct instructions from the human engineer. Follow them. They take priority
+  over your own analysis. If the engineer says "leave the drums alone", do not
+  suggest any drum changes. If the engineer says "more vocals", prioritize that.
 
 Respond with a JSON array of actions:
 [

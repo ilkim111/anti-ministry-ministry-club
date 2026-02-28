@@ -53,6 +53,9 @@ private:
     // Live channel reclassification on name change
     void onParameterUpdate(const ParameterUpdate& u);
 
+    // Chat message handler — called from UI thread
+    void onChatMessage(const std::string& message);
+
     // Build LLM context from current state
     nlohmann::json buildMixContext();
 

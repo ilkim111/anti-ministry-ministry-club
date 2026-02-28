@@ -13,5 +13,7 @@
     "llm_temperature": 0.3,
     "llm_max_tokens": 1024,
 
-    "notes": "Drop your console IP above and your API key in .env"
+    "ollama_primary": false,
+
+    "notes": "Set ollama_primary to true for fully local operation (no API key needed). Drop your console IP above and your API key in .env"
 }

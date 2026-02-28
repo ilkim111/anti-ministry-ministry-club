@@ -3,7 +3,6 @@
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <spdlog/spdlog.h>
-#include <mutex>
 
 using namespace ftxui;
 
@@ -20,6 +19,13 @@ void ApprovalUI::addLog(const std::string& msg) {
         logs_.erase(logs_.begin());
 }
 
+void ApprovalUI::addChatResponse(const std::string& msg) {
+    std::lock_guard lock(chatMtx_);
+    chatHistory_.push_back("agent> " + msg);
+    if ((int)chatHistory_.size() > maxChatHistory_)
+        chatHistory_.erase(chatHistory_.begin());
+}
+
 void ApprovalUI::setStatus(const std::string& status) {
     status_ = status;
 }
@@ -29,12 +35,10 @@ void ApprovalUI::stop() {
 }
 
 void ApprovalUI::render() {
-    // Single frame render for non-interactive mode
+    // Single frame render for non-interactive / headless mode — unchanged
     auto pending = queue_.pending();
-
     auto screen = Screen::Create(Dimension::Full(), Dimension::Full());
 
-    // Build approval list
     Elements pendingElements;
     for (size_t i = 0; i < pending.size(); i++) {
         auto& qa = pending[i];
@@ -64,47 +68,27 @@ void ApprovalUI::render() {
         );
     }
 
-    if (pendingElements.empty()) {
-        pendingElements.push_back(
-            text("No pending actions") | dim | center);
-    }
+    if (pendingElements.empty())
+        pendingElements.push_back(text("No pending actions") | dim | center);
 
-    // Build log feed
     Elements logElements;
     int logStart = std::max(0, (int)logs_.size() - 15);
-    for (int i = logStart; i < (int)logs_.size(); i++) {
+    for (int i = logStart; i < (int)logs_.size(); i++)
         logElements.push_back(text(logs_[i]) | dim);
-    }
 
     auto doc = vbox({
-        // Header
         hbox({
             text("MixAgent") | bold | color(Color::Cyan),
-            text(" | "),
-            text(status_) | color(Color::Green),
+            text(" | "), text(status_) | color(Color::Green),
             filler(),
             text("Pending: " + std::to_string(pending.size())) |
                 color(pending.empty() ? Color::Green : Color::Yellow),
         }) | borderLight,
-
-        // Approval queue
-        vbox({
-            text("Approval Queue") | bold | underlined,
-            separator(),
-            vbox(pendingElements),
-        }) | border | flex,
-
-        // Activity log
-        vbox({
-            text("Activity") | bold | underlined,
-            separator(),
-            vbox(logElements),
-        }) | border | flex,
-
-        // Controls
-        hbox({
-            text("[a]pprove  [r]eject  [A]pprove all  "
-                 "[R]eject all  [q]uit") | dim,
+        vbox({ text("Approval Queue") | bold | underlined, separator(),
+               vbox(pendingElements), }) | border | flex,
+        vbox({ text("Activity") | bold | underlined, separator(),
+               vbox(logElements), }) | border | flex,
+        hbox({ text("[a]pprove  [r]eject  [A]ll  [/]chat  [q]uit") | dim,
         }) | borderLight,
     });
 
@@ -118,10 +102,25 @@ void ApprovalUI::run() {
     auto screen = ScreenInteractive::Fullscreen();
 
     int selectedIndex = 0;
+    std::string chatInput;
 
     auto renderer = Renderer([&] {
         auto pending = queue_.pending();
 
+        // ── Header ────────────────────────────────────────────────
+        std::string modeStr = (uiMode_ == UIMode::Chat) ? "CHAT" : "QUEUE";
+        Color modeColor = (uiMode_ == UIMode::Chat) ? Color::Magenta : Color::Cyan;
+
+        auto header = hbox({
+            text(" MixAgent ") | bold | color(Color::Cyan) | inverted,
+            text(" "),
+            text(status_) | color(Color::Green),
+            filler(),
+            text("[" + modeStr + "]") | color(modeColor) | bold,
+            text("  Queue: " + std::to_string(pending.size()) + " "),
+        });
+
+        // ── Approval Queue ────────────────────────────────────────
         Elements pendingElements;
         for (size_t i = 0; i < pending.size(); i++) {
             auto& qa = pending[i];
@@ -141,7 +140,8 @@ void ApprovalUI::run() {
                     urgStr = "  "; urgColor = Color::GrayDark; break;
             }
 
-            bool selected = ((int)i == selectedIndex);
+            bool selected = ((int)i == selectedIndex) &&
+                            uiMode_ == UIMode::Approval;
             auto line = hbox({
                 text(selected ? "> " : "  "),
                 text(urgStr) | color(urgColor),
@@ -156,32 +156,125 @@ void ApprovalUI::run() {
         if (pendingElements.empty())
             pendingElements.push_back(text("  No pending actions") | dim);
 
+        // ── Chat History ──────────────────────────────────────────
+        Elements chatElements;
+        {
+            std::lock_guard lock(chatMtx_);
+            int chatStart = std::max(0, (int)chatHistory_.size() - 10);
+            for (int i = chatStart; i < (int)chatHistory_.size(); i++) {
+                auto& line = chatHistory_[i];
+                if (line.substr(0, 4) == "you>") {
+                    chatElements.push_back(
+                        text("  " + line) | color(Color::Yellow));
+                } else {
+                    chatElements.push_back(
+                        text("  " + line) | color(Color::GrayLight));
+                }
+            }
+        }
+        if (chatElements.empty())
+            chatElements.push_back(
+                text("  Type / to chat with the agent") | dim);
+
+        // ── Activity Log ──────────────────────────────────────────
         Elements logElements;
-        int logStart = std::max(0, (int)logs_.size() - 20);
+        int logStart = std::max(0, (int)logs_.size() - 10);
         for (int i = logStart; i < (int)logs_.size(); i++)
             logElements.push_back(text("  " + logs_[i]) | dim);
 
-        return vbox({
-            hbox({
-                text(" MixAgent ") | bold | color(Color::Cyan) | inverted,
-                text(" "),
-                text(status_) | color(Color::Green),
+        // ── Chat input bar ────────────────────────────────────────
+        Element inputBar;
+        if (uiMode_ == UIMode::Chat) {
+            inputBar = hbox({
+                text(" > ") | bold | color(Color::Yellow),
+                text(chatInput),
+                text("_") | blink,
                 filler(),
-                text("Queue: " + std::to_string(pending.size()) + " "),
-            }),
-            separator(),
-            vbox(pendingElements) | flex,
-            separator(),
-            vbox(logElements) | flex,
+                text("[Enter] send  [Esc] back ") | dim,
+            }) | borderLight | color(Color::Yellow);
+        } else {
+            inputBar = hbox({
+                text(" [Enter] approve  [d] reject  [A] all  "
+                     "[/] chat  [q] quit ") | dim,
+            }) | borderLight;
+        }
+
+        // ── Layout: left (queue + activity), right (chat) ─────────
+        return vbox({
+            header,
             separator(),
             hbox({
-                text(" [Enter] approve  [d] reject  [A] all  [q] quit ") | dim,
-            }),
+                // Left column: approval queue + activity log
+                vbox({
+                    vbox({
+                        text(" Approval Queue") | bold,
+                        separator(),
+                        vbox(pendingElements),
+                    }) | flex,
+                    separator(),
+                    vbox({
+                        text(" Activity") | bold,
+                        separator(),
+                        vbox(logElements),
+                    }) | flex,
+                }) | flex | border,
+
+                // Right column: chat
+                vbox({
+                    text(" Chat") | bold |
+                        color(uiMode_ == UIMode::Chat
+                              ? Color::Yellow : Color::White),
+                    separator(),
+                    vbox(chatElements) | flex,
+                }) | size(WIDTH, EQUAL, 40) | border,
+            }) | flex,
+            inputBar,
         });
     });
 
     auto component = CatchEvent(renderer, [&](Event event) {
+        // ── Chat mode input handling ──────────────────────────────
+        if (uiMode_ == UIMode::Chat) {
+            if (event == Event::Escape) {
+                uiMode_ = UIMode::Approval;
+                return true;
+            }
+            if (event == Event::Return) {
+                if (!chatInput.empty()) {
+                    {
+                        std::lock_guard lock(chatMtx_);
+                        chatHistory_.push_back("you> " + chatInput);
+                        if ((int)chatHistory_.size() > maxChatHistory_)
+                            chatHistory_.erase(chatHistory_.begin());
+                    }
+                    // Fire callback to agent
+                    if (onChatMessage)
+                        onChatMessage(chatInput);
+                    chatInput.clear();
+                }
+                return true;
+            }
+            if (event == Event::Backspace) {
+                if (!chatInput.empty())
+                    chatInput.pop_back();
+                return true;
+            }
+            // Regular character input
+            if (event.is_character()) {
+                chatInput += event.character();
+                return true;
+            }
+            return false;
+        }
+
+        // ── Approval mode input handling ──────────────────────────
         auto pending = queue_.pending();
+
+        if (event == Event::Character('/')) {
+            uiMode_ = UIMode::Chat;
+            chatInput.clear();
+            return true;
+        }
         if (event == Event::ArrowUp || event == Event::Character('k')) {
             if (selectedIndex > 0) selectedIndex--;
             return true;

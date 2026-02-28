@@ -13,11 +13,12 @@ public:
     struct MemoryEntry {
         std::chrono::steady_clock::time_point timestamp;
         enum class Type {
-            ActionTaken,     // we changed something
-            ActionRejected,  // approval queue rejected it
-            Observation,     // LLM noted something
-            EngOverride,     // engineer manually changed something
-            MixSnapshot      // periodic mix state dump
+            ActionTaken,         // we changed something
+            ActionRejected,      // approval queue rejected it
+            Observation,         // LLM noted something
+            EngOverride,         // engineer manually changed something
+            EngInstruction,      // engineer typed a chat instruction
+            MixSnapshot          // periodic mix state dump
         } type;
 
         MixAction action;             // the action (if applicable)
@@ -77,6 +78,34 @@ public:
         trimLocked();
     }
 
+    void recordInstruction(const std::string& instruction) {
+        std::unique_lock lock(mtx_);
+        MixAction a;
+        a.type = ActionType::Observation;
+        a.reason = instruction;
+        entries_.push_back({
+            std::chrono::steady_clock::now(),
+            MemoryEntry::Type::EngInstruction,
+            a, {},
+            instruction
+        });
+        trimLocked();
+    }
+
+    // Get active standing instructions (last N EngInstruction entries)
+    std::vector<std::string> activeInstructions(int maxCount = 10) const {
+        std::shared_lock lock(mtx_);
+        std::vector<std::string> result;
+        for (auto it = entries_.rbegin(); it != entries_.rend(); ++it) {
+            if (it->type == MemoryEntry::Type::EngInstruction) {
+                result.push_back(it->note);
+                if ((int)result.size() >= maxCount) break;
+            }
+        }
+        std::reverse(result.begin(), result.end());
+        return result;
+    }
+
     void recordSnapshot(const nlohmann::json& mixState) {
         std::unique_lock lock(mtx_);
         entries_.push_back({
@@ -120,6 +149,10 @@ public:
                 case MemoryEntry::Type::EngOverride:
                     entry["type"] = "engineer_override";
                     entry["channel"] = e.action.channel;
+                    break;
+                case MemoryEntry::Type::EngInstruction:
+                    entry["type"] = "engineer_instruction";
+                    entry["instruction"] = e.note;
                     break;
                 case MemoryEntry::Type::MixSnapshot:
                     entry["type"] = "snapshot";

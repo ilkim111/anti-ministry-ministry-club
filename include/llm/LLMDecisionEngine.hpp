@@ -12,6 +12,7 @@ struct LLMConfig {
     std::string ollamaHost      = "http://localhost:11434";
     std::string ollamaModel     = "llama3:8b";
     bool        useFallback     = true;   // fall back to Ollama if Anthropic fails
+    bool        ollamaPrimary   = false;  // use Ollama as primary (fully local mode)
     int         maxTokens       = 1024;
     float       temperature     = 0.3f;   // low temp for consistent decisions
     int         timeoutMs       = 5000;

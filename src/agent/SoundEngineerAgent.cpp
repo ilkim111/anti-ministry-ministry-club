@@ -64,6 +64,11 @@ bool SoundEngineerAgent::start() {
     llmThread_ = std::thread(&SoundEngineerAgent::llmLoop, this);
     execThread_ = std::thread(&SoundEngineerAgent::executionLoop, this);
 
+    // Wire up chat callback
+    approvalUI_.onChatMessage = [this](const std::string& msg) {
+        onChatMessage(msg);
+    };
+
     if (!config_.headless) {
         uiThread_ = std::thread(&SoundEngineerAgent::uiLoop, this);
     }
@@ -294,9 +299,111 @@ void SoundEngineerAgent::onParameterUpdate(const ParameterUpdate& u) {
     }
 }
 
-// ── LLM Context Builder ─────────────────────────────────────────────────
+// ── Chat Handler ────────────────────────────────────────────────────────
+
+void SoundEngineerAgent::onChatMessage(const std::string& message) {
+    spdlog::info("Engineer chat: {}", message);
+
+    // Record as standing instruction in session memory
+    memory_.recordInstruction(message);
+
+    // Dispatch an immediate LLM call on a detached thread so we don't
+    // block the UI thread while waiting for the response.
+    std::thread([this, message]() {
+        try {
+            auto mixContext = buildMixContext();
+
+            nlohmann::json chatPrompt = {
+                {"mix_state",       mixContext},
+                {"recent_history",  memory_.buildContext(10)},
+                {"engineer_says",   message}
+            };
+
+            std::string systemPrompt = R"(You are an expert live sound engineer AI assistant.
+The engineer has sent you a message. Respond conversationally AND suggest
+specific mix actions if appropriate.
+
+If the message is a question about the current mix, answer it based on the
+mix state provided.
+
+If the message is an instruction (e.g. "bring up the vocals", "leave the
+drums alone", "more reverb on the snare"), acknowledge it and produce actions.
+
+Respond with JSON:
+{
+  "reply": "Your conversational response to the engineer",
+  "actions": [
+    {
+      "action": "set_fader|set_eq|set_comp|set_hpf|set_send|mute|unmute|no_action|observation",
+      "channel": 1, "role": "Kick", "value": 0.75,
+      "value2": 0.0, "value3": 1.0, "band": 1, "aux": 0,
+      "urgency": "normal", "reason": "explanation"
+    }
+  ]
+})";
+
+            auto response = llm_.callRaw(systemPrompt, chatPrompt.dump());
+
+            try {
+                auto j = nlohmann::json::parse(response);
+
+                std::string reply = j.value("reply", "");
+                if (!reply.empty())
+                    approvalUI_.addChatResponse(reply);
+
+                if (j.contains("actions") && j["actions"].is_array()) {
+                    for (auto& item : j["actions"]) {
+                        auto action = MixAction::fromJson(item);
+
+                        if (action.type == ActionType::NoAction ||
+                            action.type == ActionType::Observation) {
+                            if (!action.reason.empty())
+                                approvalUI_.addLog("LLM: " + action.reason);
+                            continue;
+                        }
+
+                        bool autoApproved = approvalQueue_.submit(action);
+                        if (autoApproved) {
+                            auto vr = validator_.validate(action, model_);
+                            if (vr.valid) {
+                                auto er = executor_.execute(vr.clamped);
+                                if (er.success) {
+                                    memory_.recordAction(vr.clamped,
+                                                         mixContext);
+                                    approvalUI_.addLog(
+                                        "Chat: " + vr.clamped.describe());
+                                }
+                            }
+                        } else {
+                            approvalUI_.addLog(
+                                "Queued: " + action.describe());
+                        }
+                    }
+                }
+            } catch (const std::exception&) {
+                // If JSON parse fails, treat whole response as plain text reply
+                approvalUI_.addChatResponse(response.substr(0, 200));
+            }
+
+        } catch (const std::exception& e) {
+            spdlog::error("Chat LLM call failed: {}", e.what());
+            approvalUI_.addChatResponse(
+                "Error: couldn't reach the LLM — " + std::string(e.what()));
+        }
+    }).detach();
+}
+
+// ── LLM Context Builder ────────────────────────────────────────────────
 
 nlohmann::json SoundEngineerAgent::buildMixContext() {
     MeterBridge bridge(model_, channelMap_);
-    return bridge.buildMixState();
+    auto state = bridge.buildMixState();
+
+    // Include any standing engineer instructions so the LLM respects them
+    auto instructions = memory_.activeInstructions(10);
+    if (!instructions.empty()) {
+        state["engineer_instructions"] = instructions;
+    }
+
+    return state;
 }
