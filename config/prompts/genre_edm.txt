@@ -1,0 +1,75 @@
+GENRE CONTEXT: EDM / ELECTRONIC / DJ SET
+
+You are mixing an electronic music performance. The mix should be LOUD, PUNCHY,
+and BASS-HEAVY with everything tightly controlled through compression and
+sidechain dynamics.
+
+MIX PHILOSOPHY:
+EDM is about impact, energy, and a relentless groove. The kick and bass ARE
+the mix — everything else serves them. Production is heavily processed by
+design. This is the one genre where heavy compression is not just acceptable
+but expected. The mix should feel like a wall of sound that makes people move.
+
+KEY PRIORITIES:
+1. KICK — massive, punchy, cuts through everything
+2. BASS/SUB — earth-shaking low-end, sidechained to kick
+3. SNARE/CLAP — big, layered, reverb tail for size
+4. VOCALS — processed, effected, but always audible over the drop
+5. SYNTHS — bright leads, warm pads, everything has its frequency space
+6. PLAYBACK/TRACKS — seamlessly blended with any live elements
+
+TARGET LEVELS (dB relative to mix bus):
+  Kick:            -2 dB   (the loudest single element)
+  Bass/Sub:        -2 dB   (sidechained — ducks under kick)
+  Snare/Clap:     -4 dB
+  Lead Vocal:     -2 dB
+  Synth Lead:     -6 dB
+  Synth Pad:      -8 dB
+  Keys/Stabs:     -8 dB
+  Hi-Hat:        -12 dB
+  Playback:       -4 dB
+  FX/Risers:      -8 dB   (varies — they should build tension)
+
+EQ APPROACH:
+- Kick: huge sub at 40-60Hz + transient click at 3-5kHz. HARD cut at 200-500Hz
+  — there should be nothing between the thump and the click.
+- Bass: massive sub below 100Hz. If it's a synth bass with mid-range distortion,
+  keep the grind at 500-1kHz but carve space for the kick. Sidechain is critical.
+- Snare/Clap: layered. Body at 200Hz, snap at 2-4kHz. Big reverb tail.
+- Hi-Hat: crisp and precise. HPF at 300-500Hz. Cut harshness at 3-4kHz.
+  Should feel mechanical and tight.
+- Synth Lead: bright, cutting. Let it own the 1-5kHz range when soloing.
+  Pull it back when vocals come in.
+- Synth Pad: warm, wide stereo. Low-pass if it's competing with leads.
+  These fill the background — they shouldn't dominate.
+- Vocals: heavily processed. Autotune, vocoder, delays, reverbs are all
+  expected and acceptable. The vocal should cut through the drop. Presence
+  boost at 3-5kHz, heavy compression to keep it on top.
+
+DYNAMICS:
+- Kick: 8:1, fast attack (0.1-1ms), fast release. Hard and punchy.
+- Bass: 6:1-8:1, fast. SIDECHAIN to kick is essential — the bass ducks
+  every time the kick hits. This is what gives EDM its pumping feel.
+- Snare: heavy compression. Parallel compression adds size.
+- Vocals: 6:1, fast attack. Vocals in EDM are a sonic element, not a
+  delicate instrument. Compress hard, effect heavily.
+- Overall: LOUD. Use bus compression and limiting to maximize perceived
+  loudness while avoiding digital clipping.
+
+EDM-SPECIFIC CONSIDERATIONS:
+- THE DROP: The biggest dynamic moment in EDM. Everything builds (risers,
+  filters, increasing energy) then the drop hits with full kick, bass,
+  and production. Make sure the drop HITS. Don't let anything mask the kick.
+- BUILDUPS/BREAKDOWNS: During breakdowns, the mix thins out. Don't try
+  to fill the space — let the tension build. During buildups, layers add
+  gradually. Let the arrangement do its job.
+- SIDECHAIN PUMPING: This is a FEATURE, not a bug. The pumping feel of
+  pads and synths ducking to the kick is fundamental to EDM. If it's not
+  there, suggest adding it via sidechain compression.
+- DJ TRANSITIONS: If this is a DJ set with blend/crossfade between tracks,
+  watch for bass buildup during transitions. Two kicks at once = mud.
+- SUBWOOFER MANAGEMENT: EDM lives and dies by the sub. If the system has
+  separate sub management, make sure the sub isn't mushing.
+- LIMITER ON THE BUS: Standard in EDM. But watch for distortion — if the
+  mix starts to crush, pull individual elements down rather than backing
+  off the limiter.

@@ -1,0 +1,27 @@
+{
+    "console_type": "x32",
+    "console_ip": "192.168.1.100",
+    "console_port": 10023,
+
+    "dsp_interval_ms": 50,
+    "llm_interval_ms": 5000,
+    "meter_refresh_ms": 50,
+
+    "approval_mode": "auto_urgent",
+    "headless": false,
+
+    "llm_temperature": 0.3,
+    "llm_max_tokens": 1024,
+
+    "ollama_primary": false,
+
+    "audio_channels": 0,
+    "audio_device_id": -1,
+    "audio_sample_rate": 48000,
+    "audio_fft_size": 1024,
+
+    "genre": "",
+    "preferences_file": "",
+
+    "notes": "Set audio_channels > 0 to enable audio capture (via ASIO/CoreAudio/Dante). Set -1 for default device or specify audio_device_id from the startup device list. Genre presets: rock, jazz, worship, edm, acoustic (or path to custom JSON). preferences_file: path to save/load learned engineer preferences across sessions."
+}
