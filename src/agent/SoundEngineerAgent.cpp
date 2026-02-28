@@ -15,6 +15,31 @@ SoundEngineerAgent::SoundEngineerAgent(
     , approvalUI_(approvalQueue_)
     , config_(agentConfig)
 {
+    // Load genre preset if configured
+    if (!config_.genre.empty()) {
+        activePreset_ = genreLibrary_.get(config_.genre);
+        if (activePreset_) {
+            spdlog::info("Genre preset: {} — {}", activePreset_->name,
+                         activePreset_->description);
+        } else {
+            // Try loading as a file path
+            if (genreLibrary_.loadFromFile(config_.genre)) {
+                activePreset_ = genreLibrary_.get("custom");
+                spdlog::info("Loaded custom genre preset from {}", config_.genre);
+            } else {
+                spdlog::warn("Unknown genre preset: '{}'", config_.genre);
+            }
+        }
+    }
+
+    // Load learned preferences from previous sessions
+    if (!config_.preferencesFile.empty()) {
+        if (preferences_.loadFromFile(config_.preferencesFile)) {
+            spdlog::info("Loaded {} preference decisions from {}",
+                         preferences_.totalDecisions(),
+                         config_.preferencesFile);
+        }
+    }
 }
 
 SoundEngineerAgent::~SoundEngineerAgent() {
@@ -91,9 +116,20 @@ bool SoundEngineerAgent::start() {
         spdlog::info("Audio capture disabled — using console meters only");
     }
 
+    // Wire rejection learning callback
+    approvalQueue_.onRejected = [this](const MixAction& action) {
+        preferences_.recordRejection(action, action.roleName);
+    };
+
     // Run channel discovery
     spdlog::info("Running channel discovery...");
     DiscoveryOrchestrator discovery(adapter_, model_, channelMap_, llm_);
+
+    // Wire channel clarification to chat panel
+    discovery.onClarificationNeeded = [this](int ch, const std::string& q) {
+        approvalUI_.addChatResponse(q);
+    };
+
     discovery.run();
 
     // Start all threads
@@ -139,6 +175,16 @@ void SoundEngineerAgent::stop() {
     if (llmThread_.joinable())  llmThread_.join();
     if (execThread_.joinable()) execThread_.join();
     if (uiThread_.joinable())   uiThread_.join();
+
+    // Persist learned preferences for next session
+    if (!config_.preferencesFile.empty() && preferences_.isDirty()) {
+        if (preferences_.saveToFile(config_.preferencesFile)) {
+            spdlog::info("Saved preferences to {}", config_.preferencesFile);
+        } else {
+            spdlog::warn("Failed to save preferences to {}",
+                         config_.preferencesFile);
+        }
+    }
 
     spdlog::info("Agent stopped");
 }
@@ -368,6 +414,10 @@ void SoundEngineerAgent::executionLoop() {
                     memory_.recordAction(vr.clamped,
                                          bridge.buildCompactState());
                     approvalUI_.addLog("Approved: " + vr.clamped.describe());
+
+                    // Learn from approval
+                    preferences_.recordApproval(vr.clamped,
+                                                vr.clamped.roleName);
                 } else {
                     spdlog::warn("Execution failed: {}", er.error);
                     approvalUI_.addLog("Failed: " + er.error);
@@ -541,6 +591,17 @@ nlohmann::json SoundEngineerAgent::buildMixContext() {
     // Include audio analysis status so LLM knows what data quality it has
     state["analysis_source"] = analyser_.hasFFTData()
         ? "fft_audio" : "console_meters";
+
+    // Include genre preset targets so LLM has concrete mix references
+    if (activePreset_) {
+        state["genre_preset"] = activePreset_->toJson();
+    }
+
+    // Include learned engineer preferences so LLM adapts to their style
+    auto prefs = preferences_.buildPreferences();
+    if (!prefs.empty()) {
+        state["engineer_preferences"] = prefs;
+    }
 
     return state;
 }

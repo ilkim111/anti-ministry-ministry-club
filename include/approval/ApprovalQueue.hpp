@@ -81,13 +81,18 @@ public:
         return true;
     }
 
+    // Callback fired when an action is rejected (for preference learning)
+    std::function<void(const MixAction&)> onRejected;
+
     // Reject action at index
     bool reject(size_t index) {
         std::lock_guard lock(mtx_);
         if (index >= pending_.size()) return false;
         pending_[index].rejected = true;
+        auto action = pending_[index].action;
         rejected_.push_back(pending_[index]);
         pending_.erase(pending_.begin() + index);
+        if (onRejected) onRejected(action);
         return true;
     }
 
@@ -108,6 +113,7 @@ public:
         for (auto& a : pending_) {
             a.rejected = true;
             rejected_.push_back(a);
+            if (onRejected) onRejected(a.action);
         }
         pending_.clear();
     }

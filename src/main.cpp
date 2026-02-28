@@ -149,6 +149,15 @@ int main(int argc, char* argv[]) {
     agentConfig.audioSampleRate = config.value("audio_sample_rate", 48000.0);
     agentConfig.audioFFTSize    = config.value("audio_fft_size", 1024);
 
+    // Genre preset and preference learning
+    agentConfig.genre           = config.value("genre", "");
+    agentConfig.preferencesFile = config.value("preferences_file", "");
+
+    if (!agentConfig.genre.empty())
+        spdlog::info("Genre preset: {}", agentConfig.genre);
+    if (!agentConfig.preferencesFile.empty())
+        spdlog::info("Preferences file: {}", agentConfig.preferencesFile);
+
     std::string approvalMode = config.value("approval_mode", "auto_urgent");
     if (approvalMode == "approve_all")
         agentConfig.approvalMode = ApprovalQueue::Mode::ApproveAll;

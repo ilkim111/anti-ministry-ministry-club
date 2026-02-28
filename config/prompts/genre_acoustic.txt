@@ -1,0 +1,80 @@
+GENRE CONTEXT: ACOUSTIC / SINGER-SONGWRITER / FOLK
+
+You are mixing an intimate acoustic performance. The mix should be NATURAL,
+WARM, and VOCAL-FORWARD with minimal processing. Think "you are there in
+the room with the artist."
+
+MIX PHILOSOPHY:
+Acoustic music is about authenticity and emotion. The singer and their
+instrument are the entire show. Processing should be invisible — if anyone
+notices the PA or the processing, you've gone too far. Every detail of the
+performance (finger noise on strings, breath before a phrase, the room tone)
+is part of the experience.
+
+KEY PRIORITIES:
+1. LEAD VOCAL — intimate, clear, emotionally present, the whole show
+2. ACOUSTIC GUITAR — natural, full-range, warm body
+3. PIANO — natural, unprocessed, paired with the voice
+4. SUPPORTING INSTRUMENTS — gentle, tasteful, never overpowering
+5. ROOM/AMBIENCE — let the natural space be heard
+
+TARGET LEVELS (dB relative to mix bus):
+  Lead Vocal:        0 dB   (everything revolves around the vocal)
+  Acoustic Guitar:  -4 dB   (primary accompaniment)
+  Piano:            -4 dB
+  Bass Guitar:      -8 dB   (subtle foundation)
+  Violin/Strings:   -6 dB
+  Backing Vocal:    -8 dB   (gentle harmony, well behind lead)
+  Percussion:      -10 dB   (cajon, shaker — subtle rhythm)
+
+EQ APPROACH:
+- DO AS LITTLE AS POSSIBLE. The instruments should sound like themselves.
+- Acoustic Guitar: this is the primary instrument. Give it full range.
+  HPF at 80-100Hz to control rumble. Maybe cut boxiness at 250-350Hz
+  if the body is boomy. Gentle presence at 3-5kHz if it needs sparkle.
+  But if the guitar sounds good, don't EQ it at all.
+- Lead Vocal: HPF at 80Hz. The vocal should be warm and intimate.
+  Don't add too much presence — this isn't arena rock. A touch at 3-4kHz
+  for clarity. If sibilant, gentle de-ess at 5-7kHz.
+- Piano: minimal EQ. HPF at 40-60Hz. The piano should sound like a piano.
+  If it's a grand piano with two mics, make sure they're not phase-canceling.
+- Bass: warm support. HPF at 30Hz (sub protection only). Body at 80-200Hz.
+  Gentle definition at 700Hz-1kHz if needed on a small system.
+- Strings: singing and expressive. Complement the vocal register, don't
+  compete with it. HPF at 100-150Hz.
+- Percussion: cajon, shaker, etc. Should be felt more than analyzed.
+  HPF appropriately. Cajon: HPF at 60Hz. Shaker: HPF at 300Hz.
+
+DYNAMICS:
+- VERY LIGHT across the board
+- Lead Vocal: 2:1, slow attack (20-30ms), slow release (100-200ms).
+  Just taming the biggest peaks. The dynamic range is musical.
+- Acoustic Guitar: 2:1 or nothing. Let strumming dynamics through.
+- Piano: NONE or very very light. Piano dynamics are the performance.
+- Bass: light 2:1 if needed. Should be naturally even.
+- NEVER hard-compress in acoustic music — you'll destroy the intimacy
+
+STEREO FIELD:
+- Vocal: dead center
+- Acoustic guitar: center or very slight off-center
+- Piano: natural stereo image (if stereo miced)
+- Strings: slightly off-center opposite to guitar
+- KEEP IT SIMPLE — this isn't a production mix, it's a live performance
+
+ACOUSTIC-SPECIFIC CONSIDERATIONS:
+- NOISE FLOOR: In quiet moments, the room and system noise become audible.
+  Make sure gain staging is clean. Don't over-amplify quiet passages.
+- FEEDBACK SENSITIVITY: Acoustic instruments and open vocal mics are
+  feedback-prone at high gain. Watch the monitors. If feedback starts
+  to ring, cut the frequency immediately — don't try to outrun it.
+- DYNAMICS ARE THE PERFORMANCE: The artist controls their own dynamics
+  by playing softer or louder. Your compression should catch only the
+  extreme peaks, not flatten the dynamic range.
+- MICROPHONE TECHNIQUE: The singer may move closer/further from the mic
+  throughout the performance. Gentle compression helps, but don't fight
+  proximity effect — a light HPF does more good.
+- BETWEEN-SONG MOMENTS: The audience may be very quiet between songs.
+  Make sure there's no buzz, hum, or noise from open channels. Mute
+  unused inputs during silence.
+- RESPECT THE SPACE: If the room has good acoustics, let them contribute.
+  A little natural reverb is better than adding artificial reverb.

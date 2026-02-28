@@ -1,0 +1,183 @@
+LIVE MIX TROUBLESHOOTING GUIDE
+
+When the "issues" array in the mix state reports problems detected by the DSP
+analyser, use this guide to determine the correct fix.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE: CLIPPING
+═══════════════════════════════════════════════════════════════════════════════
+Symptom: Peak level at or above 0 dBFS on a channel.
+Urgency: IMMEDIATE — digital clipping is harsh distortion.
+
+Fix:
+1. Reduce channel fader by 3-6dB immediately
+2. If the channel is consistently hot, reduce input gain (if accessible)
+3. Check if compression is needed to tame peaks
+4. If the mix bus is clipping, reduce the loudest channels rather than
+   pulling the master fader down
+
+DO NOT: Ignore it. Digital clipping sounds terrible and can damage speakers.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE: FEEDBACK RISK
+═══════════════════════════════════════════════════════════════════════════════
+Symptom: Sustained narrow-band energy spike, often a single frequency ringing.
+Urgency: IMMEDIATE — feedback will get louder until something breaks.
+
+Fix:
+1. Identify the ringing frequency (the DSP should provide it)
+2. Apply a narrow EQ CUT (Q=8 or higher) at that frequency, -6dB
+3. If feedback persists, increase the cut to -10dB or reduce the channel fader
+4. Check stage monitor levels — feedback usually starts in monitors
+
+DO NOT: Boost other frequencies to "mask" the feedback.
+DO NOT: Wait — feedback only gets worse.
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE: BOOMY
+═══════════════════════════════════════════════════════════════════════════════
+Symptom: Excessive energy in the 80-300Hz range. Mix sounds thick, muddy,
+indistinct. Individual instruments lack definition.
+Urgency: Normal (unless severe).
+
+Diagnosis:
+- Multiple channels contributing low-mid energy without HPF
+- Room resonance amplifying certain bass frequencies
+- Bass guitar and kick drum occupying the same frequency space
+
+Fix (in priority order):
+1. Engage/raise HPF on channels that don't need low-end:
+   - Vocals: HPF at 100-120Hz
+   - Guitars: HPF at 80-120Hz
+   - Keys: HPF at 80-200Hz (depending on patch)
+   - Overheads: HPF at 200Hz
+2. Cut 200-400Hz on the most offending channels (2-4dB, moderate Q)
+3. If kick and bass are masking each other, use complementary EQ:
+   - Give kick its space at 60-80Hz, cut bass there
+   - Give bass its definition at 100-150Hz, cut kick there
+4. Check subwoofer level — it may be too hot for the room
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE: HARSH
+═══════════════════════════════════════════════════════════════════════════════
+Symptom: Excessive energy in the 2-6kHz range. Mix is fatiguing, sibilant,
+biting. Prolonged listening causes ear fatigue.
+Urgency: Normal (but address before the audience gets tired).
+
+Diagnosis:
+- Overheads/cymbals too bright or too loud
+- Vocal presence boost too aggressive
+- Electric guitar amp tone has harsh upper-mids
+- Multiple channels with presence boosts stacking up
+
+Fix (in priority order):
+1. Check overheads/cymbals: cut 3-5kHz by 2-3dB
+2. Check vocal EQ: reduce any boost above 3kHz. A 2dB cut at 3-4kHz
+   often makes the entire mix more listenable.
+3. Pull electric guitar presence down — guitars often have too much bite
+4. If the overall mix is harsh, consider a gentle high-shelf cut on the bus
+   (but this is a last resort — fix individual channels first)
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE: THIN
+═══════════════════════════════════════════════════════════════════════════════
+Symptom: Lack of body in the 200-500Hz range. Mix sounds weak, hollow,
+lacking warmth. Instruments have no body or weight.
+Urgency: Low/Normal.
+
+Diagnosis:
+- HPF set too high on key instruments (over-filtered)
+- Too aggressive low-mid cuts
+- Room acoustics absorbing low-mids
+- Thin source tones (DI guitar without amp warmth, etc.)
+
+Fix:
+1. Lower HPF on instruments that need body:
+   - If kick HPF is at 100Hz, lower to 50Hz
+   - If vocal HPF is at 150Hz, lower to 80Hz
+2. Restore any low-mid cuts that went too far (200-400Hz range)
+3. Check bass guitar level — it may be too low
+4. Add a gentle boost at 200-300Hz on vocals or guitars (1-2dB max)
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE: MASKING
+═══════════════════════════════════════════════════════════════════════════════
+Symptom: Two or more instruments occupying the same frequency space,
+making both sound indistinct. Common: kick+bass, guitar+vocal, keys+guitar.
+Urgency: Normal.
+
+Diagnosis:
+- Kick and bass fighting at 80-200Hz
+- Guitar mid-range masking vocal presence at 2-4kHz
+- Keys and guitar both filling the same harmonic space
+- Multiple sources with similar tonal character
+
+Fix (in priority order):
+1. IDENTIFY which two instruments are masking each other
+2. DECIDE which one owns that frequency range (based on arrangement priority)
+3. CUT the competing instrument in that range:
+   - Kick vs Bass: give kick 60-80Hz, give bass 100-150Hz. Cut the other
+     in each space.
+   - Guitar vs Vocal: cut guitar at 2-4kHz (even just 2dB) to make room
+     for vocal presence. The vocal is more important.
+   - Keys vs Guitar: pan them apart AND use EQ separation
+4. HPF can also help — raising the HPF on the less important instrument
+   creates space for the more important one
+5. PANNING helps: if two similar instruments are both center, pan them apart
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE: MUDDY
+═══════════════════════════════════════════════════════════════════════════════
+Symptom: Overall mix lacks clarity. Low-mid buildup across multiple channels.
+Similar to "boomy" but more diffuse — the whole mix feels cloudy.
+Urgency: Normal.
+
+Fix:
+1. This is almost always a HPF problem. Go through EVERY channel and ensure
+   appropriate HPF is engaged:
+   - Everything except kick, bass, and possibly piano/organ should have
+     HPF at 80Hz or higher
+2. Cut 200-400Hz on any channel that sounds thick or boxy
+3. Check for unnecessary low-end from effects returns (reverb low-end
+   builds up fast — HPF your reverb returns at 200Hz)
+4. Ensure gain staging is correct — channels running hot push more
+   low-mid energy into the bus
+
+═══════════════════════════════════════════════════════════════════════════════
+ISSUE: NO HEADROOM
+═══════════════════════════════════════════════════════════════════════════════
+Symptom: Mix bus approaching 0dBFS with no room for peaks.
+Urgency: Fast (before it clips).
+
+Fix:
+1. Identify the loudest channels and pull them down 2-3dB
+2. Check for channels that are unnecessarily hot (is the hi-hat really
+   that loud? Are unused channels contributing noise?)
+3. Consider engaging bus compression if not already active
+4. DO NOT pull down the master fader as a first resort — fix the sources
+
+═══════════════════════════════════════════════════════════════════════════════
+GENERAL TROUBLESHOOTING APPROACH
+═══════════════════════════════════════════════════════════════════════════════
+
+When you see an issue in the DSP analysis:
+
+1. CONFIRM — does the issue match what you'd expect from the channel roles?
+   (A boomy kick might be intentional in EDM. A thin acoustic guitar is
+   always a problem.)
+
+2. IDENTIFY THE SOURCE — which specific channel(s) are causing the problem?
+   Look at per-channel spectral data if available.
+
+3. FIX THE SOURCE — cut at the problem channel, don't compensate elsewhere.
+   "Turn down what's too loud" not "turn up everything else."
+
+4. CHECK CONTEXT — consider the genre preset. A harsh cymbal in jazz is
+   a problem. In metal, it might be acceptable.
+
+5. BE MINIMAL — make the smallest change that fixes the issue. You can
+   always do more on the next cycle.
+
+6. REPORT — even if you take action, include an observation explaining
+   what you found and what you did. This helps the engineer understand
+   your reasoning.

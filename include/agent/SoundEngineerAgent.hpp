@@ -12,6 +12,8 @@
 #include "audio/FFTAnalyser.hpp"
 #include "llm/LLMDecisionEngine.hpp"
 #include "llm/SessionMemory.hpp"
+#include "llm/GenrePreset.hpp"
+#include "llm/PreferenceLearner.hpp"
 #include "approval/ApprovalQueue.hpp"
 #include "approval/ApprovalUI.hpp"
 #include <nlohmann/json.hpp>
@@ -33,6 +35,10 @@ struct AgentConfig {
     int  audioChannels    = 0;     // 0 = disable audio capture
     double audioSampleRate = 48000;
     int  audioFFTSize     = 1024;
+
+    // Genre preset and preference learning
+    std::string genre;                  // "rock", "jazz", "worship", "edm", "acoustic"
+    std::string preferencesFile;        // path to save/load learned preferences
 
     ApprovalQueue::Mode approvalMode = ApprovalQueue::Mode::AutoUrgent;
 };
@@ -88,6 +94,11 @@ private:
     ApprovalQueue      approvalQueue_;
     ApprovalUI         approvalUI_;
     NameClassifier     nameClassifier_;
+
+    // Genre preset and preference learning
+    GenrePresetLibrary genreLibrary_;
+    const GenrePreset* activePreset_ = nullptr;
+    PreferenceLearner  preferences_;
 
     // Audio capture (optional)
     std::unique_ptr<IAudioCapture> audioCapture_;

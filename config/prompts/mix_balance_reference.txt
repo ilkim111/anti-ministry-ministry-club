@@ -1,0 +1,200 @@
+LIVE SOUND MIX BALANCE REFERENCE GUIDE
+
+This document provides reference level targets and EQ guidelines for achieving
+a well-balanced live mix. These are starting points — adjust based on the room,
+the genre, and the engineer's preferences.
+
+═══════════════════════════════════════════════════════════════════════════════
+GAIN STAGING FUNDAMENTALS
+═══════════════════════════════════════════════════════════════════════════════
+
+A properly gain-staged mix starts at the preamp:
+- Input gain: peaks at -18 to -12 dBFS (digital) or 0 VU (analog)
+- Channel fader: at or near unity (0dB / 75% on most digital consoles)
+- Mix bus: peaks at -6 to -3 dBFS, leaving headroom for dynamics
+- Never clip the mix bus — reduce individual channels, don't ride the master
+
+If channels need extreme fader positions to balance, the gain staging is wrong.
+Fix it at the preamp first.
+
+═══════════════════════════════════════════════════════════════════════════════
+RELATIVE LEVEL TARGETS (dB relative to mix bus)
+═══════════════════════════════════════════════════════════════════════════════
+
+These are approximate RMS levels relative to the main bus output:
+
+DRUMS:
+  Kick Drum       -6 to -4 dB    Foundation. Felt as much as heard.
+  Snare Drum      -6 to -3 dB    The backbeat. Should crack through the mix.
+  Hi-Hat          -14 to -10 dB  Present but never dominating.
+  Toms            -10 to -6 dB   Only prominent during fills.
+  Overheads       -12 to -8 dB   Cymbal image and room sound.
+  Room Mic        -18 to -12 dB  Ambience only. Adds life when blended subtly.
+
+BASS:
+  Bass Guitar/DI  -6 to -3 dB    Locked with kick. The low-end foundation.
+  Bass Amp        -12 to -8 dB   Grind/character blend with DI.
+
+GUITARS:
+  Electric Guitar -10 to -6 dB   Sits in the mid-range bed. Don't mask vocals.
+  Acoustic Guitar -12 to -8 dB   Rhythm bed or featured (depends on arrangement).
+
+KEYBOARDS:
+  Piano           -8 to -4 dB    Can lead or pad. Very arrangement-dependent.
+  Keys/Synth      -12 to -6 dB   Pads fill space. Leads should poke through.
+  Organ           -10 to -6 dB   Warm bed. Watch low-mid buildup.
+
+VOCALS:
+  Lead Vocal       0 to +2 dB    THE most important element. Always intelligible.
+  Backing Vocal   -8 to -4 dB    Support the lead. Never compete.
+  Choir           -10 to -6 dB   Blended wash, not individual voices.
+  Presenter        0 to +3 dB    Speech intelligibility is paramount.
+
+STRINGS/BRASS:
+  Violin/Strings  -10 to -6 dB   Lush but not overpowering.
+  Trumpet         -8 to -4 dB    Bright, cuts through — watch harshness.
+  Saxophone       -6 to -3 dB    Rich and present. Watch honk at 800Hz-1kHz.
+
+OTHER:
+  Playback/Tracks -6 to -3 dB    Should blend seamlessly with live elements.
+  Click Track     -inf (NEVER in FOH!) Only in monitors/IEM.
+
+═══════════════════════════════════════════════════════════════════════════════
+HIGH-PASS FILTER (HPF) STARTING POINTS
+═══════════════════════════════════════════════════════════════════════════════
+
+HPF is your most powerful cleanup tool. If a source doesn't need low-end,
+cut it. This cleans up the mix bus and reduces rumble/stage noise.
+
+  Kick Drum        30-50 Hz    (only cut sub-rumble)
+  Snare Drum       80-120 Hz
+  Hi-Hat           200-400 Hz
+  Toms             60-100 Hz   (lower for floor tom, higher for rack)
+  Overheads        150-250 Hz
+  Bass Guitar      20-40 Hz    (just DC/sub protection)
+  Electric Guitar  80-120 Hz
+  Acoustic Guitar  80-120 Hz
+  Piano            40-80 Hz    (depending on whether low notes are used)
+  Keys/Synth       varies      (depends on patch — pad=80Hz, lead=200Hz)
+  Lead Vocal       80-120 Hz
+  Backing Vocal    120-200 Hz
+  Brass            80-150 Hz
+  Strings          100-200 Hz
+
+═══════════════════════════════════════════════════════════════════════════════
+EQ CHARACTER GUIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+FREQUENCY RANGES AND WHAT THEY DO:
+
+  20-60 Hz     SUB BASS       Felt, not heard. Kick thump, bass weight.
+  60-200 Hz    BASS           Warmth, body, fullness. Too much = muddy.
+  200-500 Hz   LOW MID        Body, thickness. The "mud" zone if excessive.
+  500-2kHz     MID            Presence, definition, "punch". Nasal if too much.
+  2-6kHz       UPPER MID      Clarity, attack, articulation. Harsh if excessive.
+  6-10kHz      PRESENCE       Brilliance, sibilance, cymbal shimmer.
+  10-20kHz     AIR            Sparkle, openness. Subtle — a little goes far.
+
+COMMON EQ MOVES BY INSTRUMENT:
+
+Kick Drum:
+  - Cut 300-500Hz (removes boxiness)
+  - Boost 60-80Hz (adds thump) — or better, cut everything else around it
+  - Boost 3-5kHz slightly (adds click/attack)
+
+Snare:
+  - Cut 300-500Hz (reduces boxiness)
+  - Presence at 2-5kHz (crack/attack)
+  - Body at 150-250Hz if thin
+
+Bass Guitar:
+  - Cut 200-400Hz (reduces mud, separates from kick)
+  - Low-end fundamental at 60-100Hz
+  - Definition at 800Hz-1.2kHz (helps on small systems)
+
+Electric Guitar:
+  - CUT 2-4kHz if competing with vocals
+  - Body at 200-400Hz (but watch for mud)
+  - Presence at 3-5kHz for lead parts
+
+Vocals:
+  - HPF at 80-120Hz (always)
+  - Cut mud at 200-350Hz if boomy
+  - Presence boost at 3-5kHz for clarity (or better: cut competing instruments)
+  - De-ess at 5-8kHz if sibilant (narrow Q, gentle cut)
+
+═══════════════════════════════════════════════════════════════════════════════
+DYNAMICS PROCESSING GUIDELINES
+═══════════════════════════════════════════════════════════════════════════════
+
+COMPRESSION (making loud things quieter):
+  Kick:     4:1, fast attack (1-5ms), medium release (50-100ms)
+  Snare:    3:1, medium attack (5-15ms), medium release (50-100ms)
+  Bass:     4:1, fast attack (2-10ms), medium release (50-100ms)
+  Vocals:   3:1 to 4:1, medium attack (10-20ms), medium release (100-200ms)
+  Acoustic: 2:1, slow attack (20-40ms), medium release
+  Keys:     2:1 or less, gentle — preserve dynamics
+
+WHEN NOT TO COMPRESS:
+  - Jazz: minimal compression. Let dynamics breathe.
+  - Overheads: usually no compression on cymbal mics
+  - Room mics: no compression (or very light for vibe)
+  - Anything that sounds good without it
+
+GATES (muting signal below a threshold):
+  - Kick: tight gate, fast attack, fast release (keep it punchy)
+  - Snare: moderate gate (watch for ghost notes getting cut)
+  - Toms: gate to reduce bleed when toms aren't being played
+  - NEVER gate vocals or melodic instruments
+
+═══════════════════════════════════════════════════════════════════════════════
+STEREO FIELD AND PANNING
+═══════════════════════════════════════════════════════════════════════════════
+
+CENTER (mono-compatible foundation):
+  - Kick, snare, bass guitar, lead vocal, presenter
+  - These elements must work in mono for PA systems
+
+PANNED SLIGHTLY (±20-40%):
+  - Acoustic guitar, keys, backing vocals
+  - Creates width without losing mono compatibility
+
+PANNED WIDER (±40-70%):
+  - Electric guitars (L/R for two guitars)
+  - Stereo keys
+  - Backing vocal groups (spread)
+
+HARD PAN (±80-100%):
+  - Stereo overheads (L/R)
+  - Stereo effects returns
+  - Rarely for live — risks uneven coverage in the room
+
+RULE: In live sound, extreme panning means half the audience misses it.
+Keep the important stuff centered or just slightly off-center.
+
+═══════════════════════════════════════════════════════════════════════════════
+DECISION FRAMEWORK: WHEN TO ACT VS WHEN TO WAIT
+═══════════════════════════════════════════════════════════════════════════════
+
+ACT IMMEDIATELY (urgency: immediate):
+  - Feedback ring detected → cut the offending frequency NOW
+  - Channel clipping → reduce gain/fader by 3-6dB
+  - Forgotten mute during performance → unmute
+
+ACT SOON (urgency: fast):
+  - Vocal buried under instruments → pull instruments down 2-3dB
+  - Excessive bass buildup → engage HPF or cut low-mids
+  - Harsh cymbal bleed → cut upper-mids on overhead
+
+SUGGEST (urgency: normal):
+  - Could use 1-2dB more snare attack
+  - Guitar tone slightly muddy, suggest 300Hz cut
+  - Backing vocals could come up in the chorus
+
+OBSERVE ONLY (urgency: low or observation):
+  - Dynamics are wide but musical — no action needed
+  - The engineer's fader ride is handling the verse/chorus transitions
+  - Mix balance is good for the current song section
+
+WHEN IN DOUBT: observe. A "no_action" with a thoughtful reason is always
+better than an unnecessary change that disrupts the mix.

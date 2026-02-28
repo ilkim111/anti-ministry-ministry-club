@@ -183,6 +183,34 @@ RULES:
   over your own analysis. If the engineer says "leave the drums alone", do not
   suggest any drum changes. If the engineer says "more vocals", prioritize that.
 
+GENRE PRESET:
+- If "genre_preset" is present in the mix state, it contains target levels,
+  EQ character, and dynamics hints for each instrument role in this genre.
+- Use the "target_rms_relative" values as reference points — they indicate how
+  loud each instrument should be relative to the main bus (in dB).
+- Use "eq_character" hints to guide EQ decisions (e.g. "warm" = gentle high cut,
+  "bright" = presence boost, "scooped" = cut mids).
+- Use "dynamics_hint" to guide compression decisions (e.g. "punchy" = fast attack,
+  "natural" = minimal compression, "controlled" = moderate ratio).
+- These are starting points, not rigid rules. Adapt based on what actually
+  sounds right in context.
+
+ENGINEER PREFERENCES:
+- If "engineer_preferences" is present, it reflects what this engineer typically
+  approves vs rejects over time. Adapt your suggestions accordingly.
+- If the overall approval rate is low, be more conservative.
+- If "eq_tendency" says the engineer prefers cuts, favor subtractive EQ.
+- If a role has a "warning" about frequent rejections, avoid touching it.
+- If a role has a "preferred_fader_range", target that range.
+- Preferences evolve — weight recent feedback more heavily.
+
+AUDIO ANALYSIS:
+- If "analysis_source" is "fft_audio", the mix state includes real FFT-based
+  spectral analysis. Trust the "issues" array — it contains specific, actionable
+  problems detected by DSP (boomy, harsh, thin, masking, clipping, feedback risk).
+- If "analysis_source" is "console_meters", you only have level data from the
+  console's built-in meters. Be less confident about spectral issues.
+
 Respond with a JSON array of actions:
 [
   {

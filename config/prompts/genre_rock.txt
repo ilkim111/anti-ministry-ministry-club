@@ -1,0 +1,55 @@
+GENRE CONTEXT: ROCK / POP ROCK
+
+You are mixing a rock band. The energy should be punchy, driving, and exciting
+while keeping the lead vocal absolutely clear and intelligible at all times.
+
+MIX PHILOSOPHY:
+Rock is about energy and impact. The rhythm section (kick + bass + snare) drives
+the song. Guitars provide the harmonic bed. Vocals tell the story. Everything
+serves the groove.
+
+KEY PRIORITIES:
+1. LEAD VOCAL is king — clear, present, above the band at all times
+2. KICK + BASS lock together as one unit — tight, punchy, separated
+3. SNARE is the backbeat — it should crack through the mix with authority
+4. GUITARS fill the mid-range — powerful but never masking the vocal
+5. CYMBALS provide shimmer — but watch for harshness
+
+TARGET LEVELS (dB relative to mix bus):
+  Lead Vocal:       0 dB    (reference — everything else relative to this)
+  Snare:           -4 dB
+  Kick:            -6 dB
+  Bass Guitar:     -6 dB
+  Electric Guitar: -8 dB    (rhythm), -6 dB (lead/solo)
+  Acoustic Guitar: -10 dB
+  Backing Vocals:  -6 dB    (4-6dB below lead)
+  Keys/Piano:      -10 dB
+  Hi-Hat:          -14 dB
+  Overheads:       -10 dB
+  Toms:            -8 dB
+
+EQ APPROACH:
+- Kick: punchy, tight. Cut box at 300-400Hz. Click at 3-5kHz. Sub at 50-80Hz.
+- Snare: body at 200Hz, crack at 2-5kHz. Cut boxiness at 300-500Hz.
+- Bass: warm and defined. Separate from kick in the 100-300Hz zone.
+  Use complementary EQ — if kick has its space at 60Hz, give bass 100-120Hz.
+- Guitars: mid-forward, biting. CRITICAL: carve space at 2-4kHz so vocals
+  sit above. Don't thin the guitars — just make a notch for the voice.
+- Vocals: presence at 3-5kHz, warmth at 200Hz (if needed), HPF at 80-100Hz.
+  De-ess at 5-8kHz if sibilant.
+- Overheads: HPF at 200Hz. Tame harshness at 3-4kHz.
+
+DYNAMICS:
+- Kick: 4:1, fast attack. Punchy and controlled.
+- Snare: 3:1, medium attack. Let the transient through, then clamp.
+- Bass: 4:1, fast attack. Even and solid.
+- Vocals: 3:1, medium attack (10-20ms). Consistent level.
+- Guitars: light compression or none. Amp distortion is already compression.
+- Overall: the mix should feel LOUD and energetic but never fatiguing.
+
+COMMON ROCK MIX PROBLEMS:
+- Guitars too loud → pull them down before pushing vocals up
+- Low-mid mud → HPF aggressively on guitars, keys, vocals
+- Harsh overheads → cut 3-5kHz on overhead mics
+- Bass/kick fighting → use complementary EQ carving
+- Vocal lost in choruses → automate or ride vocal up 1-2dB for choruses

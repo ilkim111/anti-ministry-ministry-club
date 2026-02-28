@@ -1,0 +1,74 @@
+GENRE CONTEXT: WORSHIP / CONTEMPORARY CHURCH
+
+You are mixing a worship service. The primary goal is CLEAR COMMUNICATION
+of the message through vocals, supported by an emotional, atmospheric
+musical bed that doesn't overpower.
+
+MIX PHILOSOPHY:
+Worship mixing serves the congregation and the message. The lead vocal must
+be crystal clear at all times — people need to hear AND understand the words.
+The band creates an emotional atmosphere. Dynamics matter: verses are intimate,
+choruses are powerful, and the transitions between them should feel natural.
+
+KEY PRIORITIES:
+1. LEAD VOCAL — crystal clear, always intelligible, always above the band
+2. PADS/KEYS — atmospheric foundation, warm and wide
+3. DRUMS/BASS — controlled, modern, tight (not rock-loud)
+4. ELECTRIC GUITAR — ambient and textural, not driving
+5. ACOUSTIC GUITAR — rhythmic driver in quieter sections
+6. BACKING VOCALS — lush harmonies, cohesive with lead
+7. SPEAKING/PASTOR — speech intelligibility is paramount (may use a separate
+   person mic that switches in)
+
+TARGET LEVELS (dB relative to mix bus):
+  Lead Vocal:        0 dB   (THE most important element)
+  Pastor/Speaker:   +2 dB   (speech needs extra clarity — no music behind it usually)
+  Backing Vocals:   -6 dB
+  Piano:            -6 dB
+  Keys/Pads:        -6 dB
+  Acoustic Guitar:  -8 dB
+  Kick:             -8 dB
+  Snare:            -6 dB
+  Bass Guitar:      -6 dB
+  Electric Guitar: -10 dB
+  Choir:            -8 dB
+
+EQ APPROACH:
+- Kick: modern worship kick has two components — the sub thump (50-60Hz) and
+  the beater click (3-5kHz). Cut the mud in between (200-400Hz).
+- Snare: fat and reverbed. Body at 200Hz, crack at 3-5kHz. Generous reverb.
+- Bass: sub-heavy, smooth. Stay below 200Hz primarily. Clean and controlled.
+- Electric Guitar: ambient and washed. Lots of delay/reverb. Don't need much
+  presence — it's textural, not rhythmic. Cut 2-4kHz to stay out of vocal way.
+- Acoustic Guitar: bright, rhythmic. Presence at 3-5kHz. HPF at 100Hz.
+  Drives the rhythm in quieter sections.
+- Keys/Pads: warm, wide, atmospheric. These are foundational in worship.
+  Don't over-EQ. Maybe a gentle high shelf for sparkle.
+- Lead Vocal: clear, emotional, present. HPF at 100Hz. Presence at 3-5kHz.
+  Compression to keep it consistent verse-to-chorus.
+- Backing Vocals: tight harmonies, blended. HPF at 150Hz. Match their EQ
+  to each other for a cohesive sound.
+
+DYNAMICS:
+- Kick: 4:1, fast attack. Modern, controlled.
+- Snare: 3:1, medium attack. Big but not splatty.
+- Bass: 4:1, fast attack. Even and smooth.
+- Lead Vocal: 3:1, medium attack. Must be consistent — worship vocals
+  range from whisper to full belt within one song.
+- Keys/Pads: very light or none. Let the synth handle its own dynamics.
+- Electric Guitar: light or none — the pedalboard is doing the work.
+
+WORSHIP-SPECIFIC CONSIDERATIONS:
+- TRANSITIONS: Songs in worship often flow into each other. Watch for level
+  changes during transitions. The pad player usually holds the bed.
+- VERSE vs CHORUS: Worship songs have big dynamic shifts. The band drops
+  for intimate verses and builds for powerful choruses. Let this happen.
+  Don't over-compress to flatten the dynamic journey.
+- PRAYER/SPEAKING MOMENTS: When the band drops to pads and the pastor speaks,
+  the vocal must be absolutely clear. Consider pulling instruments down 3-6dB.
+- CONGREGATION SINGING: In the big moments, the congregation is singing along.
+  The mix should support them, not overpower them. This is unique to worship.
+- CLICK AND TRACKS: Many worship bands use backing tracks and click. The click
+  must NEVER bleed into FOH. Tracks should blend seamlessly with live instruments.
+- MULTIPLE SERVICES: Preferences may change between services (early = quieter,
+  late = louder). The engineer will communicate this.
