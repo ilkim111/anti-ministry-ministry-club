@@ -5,6 +5,7 @@
 #include <vector>
 #include <shared_mutex>
 #include <algorithm>
+#include <unordered_map>
 
 enum class InstrumentRole {
     Unknown,

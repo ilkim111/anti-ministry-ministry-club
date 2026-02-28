@@ -32,7 +32,7 @@ private:
     // OSC message construction
     std::vector<uint8_t> buildOscMessage(const std::string& address,
                                           const std::vector<ParamValue>& args);
-    void sendOsc(const std::string& address, const std::vector<ParamValue>& args);
+    void sendOscQuery(const std::string& address);  // no-arg query
     void sendOsc(const std::string& address, float value);
     void sendOsc(const std::string& address, int value);
     void sendOsc(const std::string& address, const std::string& value);

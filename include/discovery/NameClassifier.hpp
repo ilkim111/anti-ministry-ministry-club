@@ -47,7 +47,7 @@ public:
             InstrumentRole::BassAmp, "bass", DiscoveryConfidence::High);
 
         // ── Guitars ───────────────────────────────────────────────────
-        add(R"(^e\.?gtr|elec.?git|e\.?guitar|gtr\s*[lr12]?$)",
+        add(R"(^e\.?gtr|elec.?git|e\.?guitar|^gtr\s*[lr12]?$)",
             InstrumentRole::ElectricGuitar, "guitars", DiscoveryConfidence::High);
         add(R"(ac.?git|acoustic|a\.?gtr)",
             InstrumentRole::AcousticGuitar, "guitars", DiscoveryConfidence::High);

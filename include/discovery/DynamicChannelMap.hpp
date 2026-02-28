@@ -1,5 +1,6 @@
 #pragma once
 #include "ChannelProfile.hpp"
+#include <mutex>
 #include <shared_mutex>
 #include <vector>
 #include <string>

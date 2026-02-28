@@ -2,6 +2,7 @@
 #include "ParameterTypes.hpp"
 #include <string>
 #include <vector>
+#include <mutex>
 #include <shared_mutex>
 #include <cmath>
 

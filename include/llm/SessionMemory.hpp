@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 #include <deque>
 #include <string>
+#include <mutex>
 #include <shared_mutex>
 #include <chrono>
 

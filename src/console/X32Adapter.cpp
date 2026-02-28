@@ -49,7 +49,7 @@ bool X32Adapter::connect(const std::string& ip, int port) {
     recvThread_ = std::thread(&X32Adapter::receiveLoop, this);
 
     // Send initial /xinfo to verify connection
-    sendOsc("/xinfo", {});
+    sendOscQuery("/xinfo");
 
     spdlog::info("X32: connected to {}:{}", ip_, port_);
 
@@ -94,44 +94,44 @@ void X32Adapter::requestFullSync() {
     // X32 supports /‐‐‐info for bulk dump, but the standard approach
     // is to request each channel's parameters individually.
     // Using /xremote first to establish subscription, then querying.
-    sendOsc("/xremote", {});
+    sendOscQuery("/xremote");
 
     for (int ch = 1; ch <= 32; ch++) {
         // Request channel config block
-        sendOsc(channelPath(ch, "/config/name"), {});
-        sendOsc(channelPath(ch, "/mix/fader"), {});
-        sendOsc(channelPath(ch, "/mix/on"), {});
-        sendOsc(channelPath(ch, "/mix/pan"), {});
-        sendOsc(channelPath(ch, "/preamp/trim"), {});
-        sendOsc(channelPath(ch, "/preamp/hpon"), {});
-        sendOsc(channelPath(ch, "/preamp/hpf"), {});
+        sendOscQuery(channelPath(ch, "/config/name"));
+        sendOscQuery(channelPath(ch, "/mix/fader"));
+        sendOscQuery(channelPath(ch, "/mix/on"));
+        sendOscQuery(channelPath(ch, "/mix/pan"));
+        sendOscQuery(channelPath(ch, "/preamp/trim"));
+        sendOscQuery(channelPath(ch, "/preamp/hpon"));
+        sendOscQuery(channelPath(ch, "/preamp/hpf"));
 
         // EQ
         for (int b = 1; b <= 4; b++) {
             std::string prefix = "/eq/" + std::to_string(b);
-            sendOsc(channelPath(ch, prefix + "/f"), {});
-            sendOsc(channelPath(ch, prefix + "/g"), {});
-            sendOsc(channelPath(ch, prefix + "/q"), {});
+            sendOscQuery(channelPath(ch, prefix + "/f"));
+            sendOscQuery(channelPath(ch, prefix + "/g"));
+            sendOscQuery(channelPath(ch, prefix + "/q"));
         }
 
         // Dynamics
-        sendOsc(channelPath(ch, "/dyn/thr"), {});
-        sendOsc(channelPath(ch, "/dyn/ratio"), {});
-        sendOsc(channelPath(ch, "/dyn/attack"), {});
-        sendOsc(channelPath(ch, "/dyn/release"), {});
-        sendOsc(channelPath(ch, "/dyn/on"), {});
+        sendOscQuery(channelPath(ch, "/dyn/thr"));
+        sendOscQuery(channelPath(ch, "/dyn/ratio"));
+        sendOscQuery(channelPath(ch, "/dyn/attack"));
+        sendOscQuery(channelPath(ch, "/dyn/release"));
+        sendOscQuery(channelPath(ch, "/dyn/on"));
 
         // Gate
-        sendOsc(channelPath(ch, "/gate/thr"), {});
-        sendOsc(channelPath(ch, "/gate/range"), {});
-        sendOsc(channelPath(ch, "/gate/on"), {});
+        sendOscQuery(channelPath(ch, "/gate/thr"));
+        sendOscQuery(channelPath(ch, "/gate/range"));
+        sendOscQuery(channelPath(ch, "/gate/on"));
     }
 
     // Buses
     for (int bus = 1; bus <= 16; bus++) {
-        sendOsc(busPath(bus, "/config/name"), {});
-        sendOsc(busPath(bus, "/mix/fader"), {});
-        sendOsc(busPath(bus, "/mix/on"), {});
+        sendOscQuery(busPath(bus, "/config/name"));
+        sendOscQuery(busPath(bus, "/mix/fader"));
+        sendOscQuery(busPath(bus, "/mix/on"));
     }
 }
 
@@ -375,7 +375,7 @@ void X32Adapter::sendOsc(const std::string& address, const std::string& value) {
     sendRaw(msg);
 }
 
-void X32Adapter::sendOsc(const std::string& address, const std::vector<ParamValue>& /*args*/) {
+void X32Adapter::sendOscQuery(const std::string& address) {
     // Query message — no args, just the address
     std::vector<uint8_t> msg;
     for (char c : address) msg.push_back(c);
@@ -552,12 +552,12 @@ void X32Adapter::handleMeterMessage(const uint8_t* data, size_t len) {
 }
 
 void X32Adapter::sendKeepalive() {
-    sendOsc("/xremote", {});
+    sendOscQuery("/xremote");
 }
 
 void X32Adapter::renewMeterSubscription() {
     // X32: /meters /0 requests input meters
-    sendOsc("/meters", {});
+    sendOscQuery("/meters");
     lastMeterRenew_ = std::chrono::steady_clock::now();
 }
 
