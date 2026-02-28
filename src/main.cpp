@@ -124,6 +124,10 @@ int main(int argc, char* argv[]) {
     llmConfig.temperature     = config.value("llm_temperature", 0.3f);
     llmConfig.maxTokens       = config.value("llm_max_tokens", 1024);
 
+    // System prompt files — especially useful for local models
+    llmConfig.promptDir       = config.value("prompt_dir", "");
+    llmConfig.activeGenre     = config.value("genre", "");
+
     // Auto-detect: if no API key, switch to Ollama-primary
     if (llmConfig.anthropicApiKey.empty()) {
         llmConfig.ollamaPrimary = true;
@@ -132,9 +136,17 @@ int main(int argc, char* argv[]) {
 
     if (llmConfig.ollamaPrimary) {
         spdlog::info("LLM mode: Ollama-primary ({})", llmConfig.ollamaModel);
+
+        // Default to loading prompt files for local models when no
+        // explicit prompt_dir is configured.
+        if (llmConfig.promptDir.empty())
+            llmConfig.promptDir = "config/prompts";
     } else {
         spdlog::info("LLM mode: Anthropic-primary ({})", llmConfig.anthropicModel);
     }
+
+    if (!llmConfig.promptDir.empty())
+        spdlog::info("Prompt directory: {}", llmConfig.promptDir);
 
     // Agent config
     AgentConfig agentConfig;

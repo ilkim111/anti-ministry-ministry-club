@@ -22,6 +22,7 @@
 
     "genre": "",
     "preferences_file": "",
+    "prompt_dir": "",
 
-    "notes": "Set audio_channels > 0 to enable audio capture (via ASIO/CoreAudio/Dante). Set -1 for default device or specify audio_device_id from the startup device list. Genre presets: rock, jazz, worship, edm, acoustic (or path to custom JSON). preferences_file: path to save/load learned engineer preferences across sessions."
+    "notes": "Set audio_channels > 0 to enable audio capture (via ASIO/CoreAudio/Dante). Set -1 for default device or specify audio_device_id from the startup device list. Genre presets: rock, jazz, worship, edm, acoustic (or path to custom JSON). preferences_file: path to save/load learned engineer preferences across sessions. prompt_dir: path to directory with system prompt .txt files (auto-set to config/prompts for Ollama-primary mode if left empty)."
 }

@@ -2,9 +2,19 @@
 #include <httplib.h>
 #include <spdlog/spdlog.h>
 #include <chrono>
+#include <fstream>
+#include <sstream>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 LLMDecisionEngine::LLMDecisionEngine(const LLMConfig& config)
-    : config_(config) {}
+    : config_(config)
+{
+    if (!config_.promptDir.empty()) {
+        loadPromptFiles();
+    }
+}
 
 LLMDecisionEngine::~LLMDecisionEngine() = default;
 
@@ -164,7 +174,97 @@ std::string LLMDecisionEngine::callOllama(
     return j.value("response", "");
 }
 
+// ---------------------------------------------------------------------------
+// File-based prompt loading
+// ---------------------------------------------------------------------------
+
+std::string LLMDecisionEngine::readFileToString(const std::string& path) {
+    std::ifstream file(path);
+    if (!file.is_open()) return {};
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    return ss.str();
+}
+
+bool LLMDecisionEngine::loadPromptFiles() {
+    if (config_.promptDir.empty()) {
+        spdlog::debug("No promptDir configured — using built-in prompt");
+        return false;
+    }
+
+    fs::path dir(config_.promptDir);
+    if (!fs::is_directory(dir)) {
+        spdlog::warn("promptDir does not exist: {}", config_.promptDir);
+        return false;
+    }
+
+    // Core prompt (mandatory)
+    auto corePath = dir / "mix_engineer_core.txt";
+    loadedCorePrompt_ = readFileToString(corePath.string());
+    if (loadedCorePrompt_.empty()) {
+        spdlog::warn("Could not load core prompt: {}", corePath.string());
+        return false;
+    }
+    spdlog::info("Loaded core prompt from {}", corePath.string());
+
+    // Optional supplementary prompts
+    auto balancePath = dir / "mix_balance_reference.txt";
+    loadedBalanceRef_ = readFileToString(balancePath.string());
+    if (!loadedBalanceRef_.empty())
+        spdlog::info("Loaded balance reference from {}", balancePath.string());
+
+    auto troublePath = dir / "mix_troubleshooting.txt";
+    loadedTroubleshooting_ = readFileToString(troublePath.string());
+    if (!loadedTroubleshooting_.empty())
+        spdlog::info("Loaded troubleshooting guide from {}", troublePath.string());
+
+    // Genre-specific prompt (if an active genre is set)
+    loadedGenrePrompt_.clear();
+    if (!config_.activeGenre.empty()) {
+        auto genrePath = dir / ("genre_" + config_.activeGenre + ".txt");
+        loadedGenrePrompt_ = readFileToString(genrePath.string());
+        if (!loadedGenrePrompt_.empty())
+            spdlog::info("Loaded genre prompt for '{}' from {}",
+                         config_.activeGenre, genrePath.string());
+        else
+            spdlog::warn("No genre prompt found for '{}' at {}",
+                         config_.activeGenre, genrePath.string());
+    }
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// System prompt construction
+// ---------------------------------------------------------------------------
+
 std::string LLMDecisionEngine::buildMixSystemPrompt() const {
+    // If file-based prompts were loaded, assemble them into a rich prompt.
+    // This gives local models (Ollama) the full expert context that would
+    // otherwise only exist implicitly in a large cloud model's training.
+    if (!loadedCorePrompt_.empty()) {
+        std::string prompt = loadedCorePrompt_;
+
+        if (!loadedBalanceRef_.empty()) {
+            prompt += "\n\n";
+            prompt += loadedBalanceRef_;
+        }
+
+        if (!loadedTroubleshooting_.empty()) {
+            prompt += "\n\n";
+            prompt += loadedTroubleshooting_;
+        }
+
+        if (!loadedGenrePrompt_.empty()) {
+            prompt += "\n\n";
+            prompt += loadedGenrePrompt_;
+        }
+
+        return prompt;
+    }
+
+    // Fallback: compact built-in prompt (works well with large cloud models
+    // that already have extensive live-sound knowledge).
     return R"(You are an expert live sound engineer AI assistant.
 You are given the current state of a live mixing console and recent history.
 Analyse the mix and suggest specific, safe adjustments.
