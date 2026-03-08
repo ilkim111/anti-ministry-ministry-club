@@ -14,7 +14,9 @@
     "build-all": "npm run build-backend && npm run dist",
     "build-all:mac": "npm run build-backend && npm run dist:mac",
     "build-all:win": "npm run build-backend && npm run dist:win",
-    "build-all:linux": "npm run build-backend && npm run dist:linux"
+    "build-all:linux": "npm run build-backend && npm run dist:linux",
+    "test": "jest --verbose",
+    "test:watch": "jest --watch"
   },
   "build": {
     "appId": "com.mixagent.desktop",
@@ -32,20 +34,36 @@
       {
         "from": "../build/mixagent",
         "to": "backend/mixagent",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../config",
         "to": "config",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
       "category": "public.app-category.music",
       "icon": "assets/icon.icns",
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] },
-        { "target": "zip", "arch": ["x64", "arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "hardenedRuntime": true,
       "entitlements": "assets/entitlements.mac.plist",
@@ -54,8 +72,18 @@
     "win": {
       "icon": "assets/icon.ico",
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
@@ -68,8 +96,18 @@
     "linux": {
       "icon": "assets/icons",
       "target": [
-        { "target": "AppImage", "arch": ["x64"] },
-        { "target": "deb", "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "category": "Audio",
       "desktop": {
@@ -91,7 +129,9 @@
     "electron-updater": "^6.3.0"
   },
   "devDependencies": {
+    "@jest/globals": "^29.7.0",
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "jest": "^29.7.0"
   }
 }

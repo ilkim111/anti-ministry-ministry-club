@@ -3,24 +3,19 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
+const { parseEnv, resolveConfigDir: _resolveConfigDir, resolveBackendPath: _resolveBackendPath, loadJsonConfig, saveJsonConfig, listJsonFiles, parseBackendMessage, serializeEnv } = require('./lib/config');
+const { setupAutoUpdater, handleCheckForUpdates, handleDownloadUpdate, handleInstallUpdate } = require('./lib/updater');
 
 let mainWindow;
 let backendProcess = null;
 
 // Resolve paths — in dev use project root, in packaged use resources
 function resolveConfigDir() {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'config');
-  }
-  return path.join(__dirname, '..', 'config');
+  return _resolveConfigDir(app.isPackaged, process.resourcesPath, __dirname);
 }
 
 function resolveBackendPath() {
-  const bin = process.platform === 'win32' ? 'mixagent.exe' : 'mixagent';
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'backend', bin);
-  }
-  return path.join(__dirname, '..', 'build', bin);
+  return _resolveBackendPath(app.isPackaged, process.resourcesPath, __dirname, process.platform);
 }
 
 function createWindow() {
@@ -58,23 +53,11 @@ app.on('activate', () => {
 // ── Config file management ──────────────────────────────────────────
 
 ipcMain.handle('config:load', async () => {
-  const configPath = path.join(resolveConfigDir(), 'show.json');
-  try {
-    const raw = fs.readFileSync(configPath, 'utf-8');
-    return { ok: true, data: JSON.parse(raw), path: configPath };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
+  return loadJsonConfig(path.join(resolveConfigDir(), 'show.json'));
 });
 
 ipcMain.handle('config:save', async (_event, config) => {
-  const configPath = path.join(resolveConfigDir(), 'show.json');
-  try {
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 4) + '\n', 'utf-8');
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
+  return saveJsonConfig(path.join(resolveConfigDir(), 'show.json'), config);
 });
 
 ipcMain.handle('config:loadEnv', async () => {
@@ -83,16 +66,7 @@ ipcMain.handle('config:loadEnv', async () => {
     : path.join(__dirname, '..', '.env');
   try {
     const raw = fs.readFileSync(envPath, 'utf-8');
-    const env = {};
-    for (const line of raw.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
-      const eqIdx = trimmed.indexOf('=');
-      if (eqIdx > 0) {
-        env[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim();
-      }
-    }
-    return { ok: true, data: env };
+    return { ok: true, data: parseEnv(raw) };
   } catch {
     return { ok: true, data: {} };
   }
@@ -103,8 +77,7 @@ ipcMain.handle('config:saveEnv', async (_event, envObj) => {
     ? path.join(app.getPath('userData'), '.env')
     : path.join(__dirname, '..', '.env');
   try {
-    const lines = Object.entries(envObj).map(([k, v]) => `${k}=${v}`);
-    fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf-8');
+    fs.writeFileSync(envPath, serializeEnv(envObj), 'utf-8');
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -112,23 +85,11 @@ ipcMain.handle('config:saveEnv', async (_event, envObj) => {
 });
 
 ipcMain.handle('config:listConsoleConfigs', async () => {
-  const dir = resolveConfigDir();
-  try {
-    const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
-    return { ok: true, files };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
+  return listJsonFiles(resolveConfigDir());
 });
 
 ipcMain.handle('config:loadFile', async (_event, filename) => {
-  const configPath = path.join(resolveConfigDir(), filename);
-  try {
-    const raw = fs.readFileSync(configPath, 'utf-8');
-    return { ok: true, data: JSON.parse(raw) };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
+  return loadJsonConfig(path.join(resolveConfigDir(), filename));
 });
 
 // ── Backend process management ──────────────────────────────────────
@@ -176,23 +137,8 @@ ipcMain.handle('backend:start', async () => {
   backendProcess.stdout.on('data', (data) => {
     const lines = data.toString().split('\n').filter(Boolean);
     for (const line of lines) {
-      // Parse structured log lines from the backend
-      try {
-        const parsed = JSON.parse(line);
-        if (parsed.type === 'approval_request') {
-          mainWindow?.webContents.send('approval:new', parsed);
-        } else if (parsed.type === 'meter_update') {
-          mainWindow?.webContents.send('meters:update', parsed);
-        } else if (parsed.type === 'llm_response') {
-          mainWindow?.webContents.send('chat:llmResponse', parsed);
-        } else if (parsed.type === 'action_executed') {
-          mainWindow?.webContents.send('approval:executed', parsed);
-        } else {
-          mainWindow?.webContents.send('backend:log', { text: line });
-        }
-      } catch {
-        mainWindow?.webContents.send('backend:log', { text: line });
-      }
+      const { channel, data: msgData } = parseBackendMessage(line);
+      mainWindow?.webContents.send(channel, msgData);
     }
   });
 
@@ -291,65 +237,13 @@ ipcMain.handle('approval:setMode', async (_event, mode) => {
 // ── Auto-updater ────────────────────────────────────────────────────
 
 function initAutoUpdater() {
-  if (!app.isPackaged) return; // skip in dev
-
-  autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
-
-  autoUpdater.on('update-available', (info) => {
-    mainWindow?.webContents.send('updater:available', {
-      version: info.version,
-      releaseNotes: info.releaseNotes || '',
-      releaseDate: info.releaseDate || ''
-    });
+  setupAutoUpdater(autoUpdater, {
+    sendToRenderer: (channel, data) => mainWindow?.webContents.send(channel, data),
+    stopBackend,
+    isPackaged: app.isPackaged
   });
-
-  autoUpdater.on('update-not-available', () => {
-    mainWindow?.webContents.send('updater:upToDate');
-  });
-
-  autoUpdater.on('download-progress', (progress) => {
-    mainWindow?.webContents.send('updater:progress', {
-      percent: Math.round(progress.percent),
-      transferred: progress.transferred,
-      total: progress.total
-    });
-  });
-
-  autoUpdater.on('update-downloaded', () => {
-    mainWindow?.webContents.send('updater:ready');
-  });
-
-  autoUpdater.on('error', (err) => {
-    mainWindow?.webContents.send('updater:error', { error: err.message });
-  });
-
-  // Check on launch, then every 30 minutes
-  autoUpdater.checkForUpdates().catch(() => {});
-  setInterval(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
-  }, 30 * 60 * 1000);
 }
 
-ipcMain.handle('updater:check', async () => {
-  try {
-    const result = await autoUpdater.checkForUpdates();
-    return { ok: true, version: result?.updateInfo?.version };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-});
-
-ipcMain.handle('updater:download', async () => {
-  try {
-    await autoUpdater.downloadUpdate();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-});
-
-ipcMain.handle('updater:install', async () => {
-  stopBackend();
-  autoUpdater.quitAndInstall();
-});
+ipcMain.handle('updater:check', () => handleCheckForUpdates(autoUpdater));
+ipcMain.handle('updater:download', () => handleDownloadUpdate(autoUpdater));
+ipcMain.handle('updater:install', () => handleInstallUpdate(autoUpdater, stopBackend));
