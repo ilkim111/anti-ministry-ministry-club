@@ -46,4 +46,16 @@ contextBridge.exposeInMainWorld('mixagent', {
   ollama: {
     testConnection: (host)      => ipcRenderer.invoke('ollama:testConnection', host),
   },
+
+  // Auto-updater
+  updater: {
+    check: ()                   => ipcRenderer.invoke('updater:check'),
+    download: ()                => ipcRenderer.invoke('updater:download'),
+    install: ()                 => ipcRenderer.invoke('updater:install'),
+    onAvailable: (cb)           => ipcRenderer.on('updater:available', (_e, data) => cb(data)),
+    onUpToDate: (cb)            => ipcRenderer.on('updater:upToDate', () => cb()),
+    onProgress: (cb)            => ipcRenderer.on('updater:progress', (_e, data) => cb(data)),
+    onReady: (cb)               => ipcRenderer.on('updater:ready', () => cb()),
+    onError: (cb)               => ipcRenderer.on('updater:error', (_e, data) => cb(data)),
+  },
 });

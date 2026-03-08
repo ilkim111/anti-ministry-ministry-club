@@ -467,6 +467,56 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// ── Auto-updater UI ──────────────────────────────────────────────────
+function showUpdateBanner(msg, { download = false, install = false } = {}) {
+  const banner = $('#update-banner');
+  $('#update-message').textContent = msg;
+  banner.style.display = 'flex';
+  $('#btn-update-download').style.display = download ? 'inline-block' : 'none';
+  $('#btn-update-install').style.display = install ? 'inline-block' : 'none';
+}
+
+function hideUpdateBanner() {
+  $('#update-banner').style.display = 'none';
+}
+
+window.mixagent.updater.onAvailable((data) => {
+  showUpdateBanner(`Update available: v${data.version}`, { download: true });
+});
+
+window.mixagent.updater.onUpToDate(() => {
+  // silent — no banner needed
+});
+
+window.mixagent.updater.onProgress((data) => {
+  const bar = $('#update-progress-bar');
+  const progress = $('#update-progress');
+  progress.style.display = 'block';
+  bar.style.width = `${data.percent}%`;
+  $('#update-message').textContent = `Downloading update... ${data.percent}%`;
+});
+
+window.mixagent.updater.onReady(() => {
+  $('#update-progress').style.display = 'none';
+  showUpdateBanner('Update downloaded. Restart to apply.', { install: true });
+});
+
+window.mixagent.updater.onError((data) => {
+  showUpdateBanner('Update check failed: ' + data.error);
+});
+
+$('#btn-update-download').addEventListener('click', async () => {
+  $('#btn-update-download').style.display = 'none';
+  const res = await window.mixagent.updater.download();
+  if (!res.ok) showToast('Download failed: ' + res.error, 'error');
+});
+
+$('#btn-update-install').addEventListener('click', () => {
+  window.mixagent.updater.install();
+});
+
+$('#btn-update-dismiss').addEventListener('click', hideUpdateBanner);
+
 // ── Init ─────────────────────────────────────────────────────────────
 (async function init() {
   await loadConfig();

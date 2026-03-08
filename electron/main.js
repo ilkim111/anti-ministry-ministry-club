@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
 let backendProcess = null;
@@ -40,7 +41,10 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  initAutoUpdater();
+});
 
 app.on('window-all-closed', () => {
   stopBackend();
@@ -282,4 +286,70 @@ ipcMain.handle('approval:setMode', async (_event, mode) => {
   if (!backendProcess) return { ok: false, error: 'Backend not running' };
   backendProcess.stdin.write(JSON.stringify({ command: 'set_approval_mode', mode }) + '\n');
   return { ok: true };
+});
+
+// ── Auto-updater ────────────────────────────────────────────────────
+
+function initAutoUpdater() {
+  if (!app.isPackaged) return; // skip in dev
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    mainWindow?.webContents.send('updater:available', {
+      version: info.version,
+      releaseNotes: info.releaseNotes || '',
+      releaseDate: info.releaseDate || ''
+    });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    mainWindow?.webContents.send('updater:upToDate');
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('updater:progress', {
+      percent: Math.round(progress.percent),
+      transferred: progress.transferred,
+      total: progress.total
+    });
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    mainWindow?.webContents.send('updater:ready');
+  });
+
+  autoUpdater.on('error', (err) => {
+    mainWindow?.webContents.send('updater:error', { error: err.message });
+  });
+
+  // Check on launch, then every 30 minutes
+  autoUpdater.checkForUpdates().catch(() => {});
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  }, 30 * 60 * 1000);
+}
+
+ipcMain.handle('updater:check', async () => {
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { ok: true, version: result?.updateInfo?.version };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('updater:download', async () => {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('updater:install', async () => {
+  stopBackend();
+  autoUpdater.quitAndInstall();
 });

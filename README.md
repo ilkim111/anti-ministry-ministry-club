@@ -138,10 +138,11 @@ electron/        Desktop app (Electron)
 
 ```
 ANTHROPIC_API_KEY=sk-ant-xxxxx
-OLLAMA_HOST=http://localhost:11434
 MIXAGENT_MODEL=claude-sonnet-4-20250514
-MIXAGENT_FALLBACK_MODEL=llama3:8b
 ```
+
+Local model settings (Ollama host, model name, primary toggle) are configured
+in `show.json` or via the desktop app's **Local Model** panel.
 
 ## Building
 
@@ -201,6 +202,123 @@ npm run dist:mac        # macOS (.dmg, .zip)
 npm run dist:win        # Windows (.exe, portable)
 npm run dist:linux      # Linux (.AppImage, .deb)
 ```
+
+Or from the project root via `make`:
+
+```bash
+make dist               # Build backend + package for current platform
+make dist-mac           # Backend + macOS .dmg/.zip
+make dist-win           # Backend + Windows NSIS/.portable
+make dist-linux         # Backend + Linux AppImage/.deb
+```
+
+### Distribution
+
+#### For end users
+
+Users install MixAgent like any native app:
+
+| Platform | Installer | Install method |
+|----------|-----------|----------------|
+| macOS | `MixAgent-x.x.x.dmg` | Open DMG, drag to Applications |
+| macOS (CI) | `MixAgent-x.x.x-mac.zip` | Unzip, move to Applications |
+| Windows | `MixAgent-Setup-x.x.x.exe` | Run installer (choose install dir) |
+| Windows (portable) | `MixAgent-x.x.x.exe` | Run directly, no install needed |
+| Linux | `MixAgent-x.x.x.AppImage` | `chmod +x`, run directly |
+| Linux (Debian) | `mixagent_x.x.x_amd64.deb` | `sudo dpkg -i` or double-click |
+
+#### Publishing a release
+
+1. Bump the version in `electron/package.json`
+2. Build and publish via GitHub Releases:
+   ```bash
+   cd electron
+   export GH_TOKEN=ghp_xxxxx
+   npm run dist -- --publish always
+   ```
+3. Go to GitHub Releases, review the draft, and click **Publish**
+4. Users with the app installed will receive the update automatically
+
+For CI/CD, add a GitHub Actions workflow that triggers on version tags:
+
+```yaml
+# .github/workflows/release.yml
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Build backend
+        run: ./scripts/build.sh
+      - name: Build & publish Electron app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: cd electron && npm ci && npm run dist -- --publish always
+```
+
+### Auto-Updates
+
+MixAgent uses [electron-updater](https://www.electron.build/auto-update) to push
+updates to users automatically. The update flow:
+
+```
+GitHub Release published
+        │
+        ▼
+App checks for updates (on launch + every 30 min)
+        │
+        ▼
+User sees banner: "Update available: v2.1.0"
+        │
+  [Download] button
+        │
+        ▼
+Progress bar shows download progress
+        │
+        ▼
+"Update downloaded. Restart to apply."
+        │
+  [Restart & Update] button
+        │
+        ▼
+App restarts with new version
+```
+
+**How it works:**
+- On launch (and every 30 minutes), the app checks GitHub Releases for a newer
+  version via `electron-updater`
+- If an update is found, a banner appears at the top of the window
+- The user clicks **Download** — the update downloads in the background with a
+  progress bar
+- Once downloaded, the user clicks **Restart & Update** — the app stops the
+  backend, quits, installs the update, and relaunches
+- Updates are differential on macOS (blockmap-based) for faster downloads
+
+**Update channels:**
+- `releaseType: "release"` — stable releases only (default)
+- `releaseType: "prerelease"` — include pre-releases / beta builds
+
+**For fully offline / air-gapped environments:**
+Users can manually download the latest installer from GitHub Releases and
+install over the existing version. Config files and `.env` are stored in the
+OS user data directory and persist across updates.
+
+**User data locations (preserved across updates):**
+
+| Platform | Path |
+|----------|------|
+| macOS | `~/Library/Application Support/MixAgent/` |
+| Windows | `%APPDATA%\MixAgent\` |
+| Linux | `~/.config/MixAgent/` |
 
 ### Architecture
 
