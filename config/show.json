@@ -14,6 +14,8 @@
     "llm_max_tokens": 1024,
 
     "ollama_primary": false,
+    "ollama_host": "http://localhost:11434",
+    "ollama_model": "llama3:8b",
 
     "audio_channels": 0,
     "audio_device_id": -1,

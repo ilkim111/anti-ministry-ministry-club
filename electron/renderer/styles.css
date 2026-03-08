@@ -196,6 +196,52 @@ input:focus, select:focus { border-color: var(--accent); }
   color: var(--text);
 }
 
+/* ── Local Model ─────────────────────────────────────────────────── */
+.local-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.local-model-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.input-with-btn {
+  display: flex;
+  gap: 4px;
+}
+.input-with-btn input,
+.input-with-btn select {
+  flex: 1;
+  min-width: 0;
+}
+.input-with-btn .btn {
+  white-space: nowrap;
+}
+
+.conn-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.conn-status.conn-ok      { background: var(--green-dim); color: var(--green); }
+.conn-status.conn-fail    { background: var(--red-dim); color: var(--red); }
+.conn-status.conn-testing { background: var(--bg-hover); color: var(--text-dim); }
+.conn-status.conn-primary { background: var(--green-dim); color: var(--green); }
+.conn-status.conn-fallback { background: var(--bg-hover); color: var(--text-dim); }
+
+.model-info {
+  font-size: 11px;
+  color: var(--red);
+  margin-top: 0.4rem;
+  min-height: 1em;
+}
+
 /* ── Approval Queue ──────────────────────────────────────────────── */
 .approval-list {
   display: flex;

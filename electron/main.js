@@ -225,6 +225,35 @@ ipcMain.handle('chat:send', async (_event, message) => {
   return { ok: true };
 });
 
+// ── Ollama helpers ──────────────────────────────────────────────────
+
+ipcMain.handle('ollama:testConnection', async (_event, host) => {
+  const http = host.startsWith('https') ? require('https') : require('http');
+  return new Promise((resolve) => {
+    const url = new URL('/api/tags', host);
+    const req = http.get(url, { timeout: 4000 }, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const models = (data.models || []).map(m => m.name);
+          resolve({ ok: true, models });
+        } catch {
+          resolve({ ok: false, error: 'Invalid response from Ollama' });
+        }
+      });
+    });
+    req.on('error', (err) => {
+      resolve({ ok: false, error: err.message });
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ ok: false, error: 'Connection timed out' });
+    });
+  });
+});
+
 // ── Approval mode change ────────────────────────────────────────────
 
 ipcMain.handle('approval:setMode', async (_event, mode) => {

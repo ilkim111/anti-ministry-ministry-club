@@ -41,4 +41,9 @@ contextBridge.exposeInMainWorld('mixagent', {
   meters: {
     onUpdate: (cb)              => ipcRenderer.on('meters:update', (_e, data) => cb(data)),
   },
+
+  // Ollama
+  ollama: {
+    testConnection: (host)      => ipcRenderer.invoke('ollama:testConnection', host),
+  },
 });
