@@ -62,6 +62,38 @@ html, body {
 .status-badge.offline { background: var(--red-dim); color: var(--red); }
 .status-badge.running { background: var(--green-dim); color: var(--green); }
 
+/* ── Update Banner ───────────────────────────────────────────────── */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 6px 1rem;
+  background: var(--accent-dim);
+  border-bottom: 1px solid var(--accent);
+  font-size: 12px;
+  color: #fff;
+}
+.update-banner #update-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.update-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--bg-hover);
+}
+.update-progress-bar {
+  height: 100%;
+  background: var(--green);
+  transition: width 0.3s;
+  width: 0%;
+}
+
 /* ── Tabs ────────────────────────────────────────────────────────── */
 .tabs {
   display: flex;
@@ -194,6 +226,52 @@ input:focus, select:focus { border-color: var(--accent); }
   align-items: center;
   gap: 6px;
   color: var(--text);
+}
+
+/* ── Local Model ─────────────────────────────────────────────────── */
+.local-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.local-model-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.input-with-btn {
+  display: flex;
+  gap: 4px;
+}
+.input-with-btn input,
+.input-with-btn select {
+  flex: 1;
+  min-width: 0;
+}
+.input-with-btn .btn {
+  white-space: nowrap;
+}
+
+.conn-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.conn-status.conn-ok      { background: var(--green-dim); color: var(--green); }
+.conn-status.conn-fail    { background: var(--red-dim); color: var(--red); }
+.conn-status.conn-testing { background: var(--bg-hover); color: var(--text-dim); }
+.conn-status.conn-primary { background: var(--green-dim); color: var(--green); }
+.conn-status.conn-fallback { background: var(--bg-hover); color: var(--text-dim); }
+
+.model-info {
+  font-size: 11px;
+  color: var(--red);
+  margin-top: 0.4rem;
+  min-height: 1em;
 }
 
 /* ── Approval Queue ──────────────────────────────────────────────── */

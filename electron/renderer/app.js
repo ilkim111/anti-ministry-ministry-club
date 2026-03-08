@@ -23,14 +23,14 @@ const CONFIG_FIELDS = [
   'console_type', 'console_ip', 'console_port',
   'dsp_interval_ms', 'llm_interval_ms', 'meter_refresh_ms',
   'approval_mode', 'headless',
-  'llm_temperature', 'llm_max_tokens', 'ollama_primary',
+  'llm_temperature', 'llm_max_tokens',
+  'ollama_primary', 'ollama_host', 'ollama_model',
   'audio_channels', 'audio_device_id', 'audio_sample_rate', 'audio_fft_size',
   'genre', 'preferences_file'
 ];
 
 const ENV_FIELDS = [
-  'ANTHROPIC_API_KEY', 'MIXAGENT_MODEL', 'OLLAMA_HOST',
-  'MIXAGENT_FALLBACK_MODEL', 'MIXAGENT_LOG_LEVEL'
+  'ANTHROPIC_API_KEY', 'MIXAGENT_MODEL', 'MIXAGENT_LOG_LEVEL'
 ];
 
 function populateConfig(data) {
@@ -40,9 +40,42 @@ function populateConfig(data) {
     if (!el) continue;
     if (el.type === 'checkbox') {
       el.checked = !!data[key];
+    } else if (key === 'ollama_model') {
+      // Store value; will be selected after model list loads
+      el.dataset.pending = data[key] ?? '';
+      setOllamaModelValue(data[key] ?? '');
     } else {
       el.value = data[key] ?? '';
     }
+  }
+  updateOllamaPrimaryUI();
+}
+
+function setOllamaModelValue(modelName) {
+  const sel = $('#cfg-ollama_model');
+  // If the model is already in the list, select it
+  for (const opt of sel.options) {
+    if (opt.value === modelName) { sel.value = modelName; return; }
+  }
+  // Otherwise add it as a placeholder option
+  if (modelName) {
+    const opt = document.createElement('option');
+    opt.value = modelName;
+    opt.textContent = modelName;
+    sel.appendChild(opt);
+    sel.value = modelName;
+  }
+}
+
+function updateOllamaPrimaryUI() {
+  const enabled = $('#cfg-ollama_primary').checked;
+  const statusEl = $('#ollama-status');
+  if (enabled) {
+    statusEl.textContent = 'primary';
+    statusEl.className = 'conn-status conn-primary';
+  } else {
+    statusEl.textContent = 'fallback';
+    statusEl.className = 'conn-status conn-fallback';
   }
 }
 
@@ -125,6 +158,72 @@ $('#btn-env-save').addEventListener('click', async () => {
   } else {
     showToast('Save failed: ' + res.error, 'error');
   }
+});
+
+// ── Ollama: test connection & model list ─────────────────────────────
+async function testOllamaConnection() {
+  const host = $('#cfg-ollama_host').value.trim() || 'http://localhost:11434';
+  const statusEl = $('#ollama-status');
+  const infoEl = $('#ollama-model-info');
+  const btn = $('#btn-ollama-test');
+
+  btn.disabled = true;
+  btn.textContent = '...';
+  statusEl.textContent = 'connecting...';
+  statusEl.className = 'conn-status conn-testing';
+
+  const res = await window.mixagent.ollama.testConnection(host);
+
+  btn.disabled = false;
+  btn.textContent = 'Test';
+
+  if (res.ok) {
+    populateOllamaModels(res.models);
+    statusEl.textContent = `connected (${res.models.length} models)`;
+    statusEl.className = 'conn-status conn-ok';
+    infoEl.textContent = '';
+    showToast(`Ollama connected — ${res.models.length} model(s) available`);
+  } else {
+    statusEl.textContent = 'offline';
+    statusEl.className = 'conn-status conn-fail';
+    infoEl.textContent = `Could not reach Ollama at ${host}: ${res.error}`;
+    showToast('Ollama connection failed: ' + res.error, 'error');
+  }
+}
+
+function populateOllamaModels(models) {
+  const sel = $('#cfg-ollama_model');
+  const current = sel.value || sel.dataset.pending || '';
+  sel.innerHTML = '';
+
+  if (models.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = '-- no models found --';
+    sel.appendChild(opt);
+    return;
+  }
+
+  for (const name of models) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+
+  // Restore previous selection if it exists in the list
+  if (current && models.includes(current)) {
+    sel.value = current;
+  } else {
+    sel.value = models[0];
+  }
+}
+
+$('#btn-ollama-test').addEventListener('click', testOllamaConnection);
+$('#btn-ollama-refresh').addEventListener('click', testOllamaConnection);
+
+$('#cfg-ollama_primary').addEventListener('change', () => {
+  updateOllamaPrimaryUI();
 });
 
 // ── Backend start/stop ───────────────────────────────────────────────
@@ -367,6 +466,56 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+
+// ── Auto-updater UI ──────────────────────────────────────────────────
+function showUpdateBanner(msg, { download = false, install = false } = {}) {
+  const banner = $('#update-banner');
+  $('#update-message').textContent = msg;
+  banner.style.display = 'flex';
+  $('#btn-update-download').style.display = download ? 'inline-block' : 'none';
+  $('#btn-update-install').style.display = install ? 'inline-block' : 'none';
+}
+
+function hideUpdateBanner() {
+  $('#update-banner').style.display = 'none';
+}
+
+window.mixagent.updater.onAvailable((data) => {
+  showUpdateBanner(`Update available: v${data.version}`, { download: true });
+});
+
+window.mixagent.updater.onUpToDate(() => {
+  // silent — no banner needed
+});
+
+window.mixagent.updater.onProgress((data) => {
+  const bar = $('#update-progress-bar');
+  const progress = $('#update-progress');
+  progress.style.display = 'block';
+  bar.style.width = `${data.percent}%`;
+  $('#update-message').textContent = `Downloading update... ${data.percent}%`;
+});
+
+window.mixagent.updater.onReady(() => {
+  $('#update-progress').style.display = 'none';
+  showUpdateBanner('Update downloaded. Restart to apply.', { install: true });
+});
+
+window.mixagent.updater.onError((data) => {
+  showUpdateBanner('Update check failed: ' + data.error);
+});
+
+$('#btn-update-download').addEventListener('click', async () => {
+  $('#btn-update-download').style.display = 'none';
+  const res = await window.mixagent.updater.download();
+  if (!res.ok) showToast('Download failed: ' + res.error, 'error');
+});
+
+$('#btn-update-install').addEventListener('click', () => {
+  window.mixagent.updater.install();
+});
+
+$('#btn-update-dismiss').addEventListener('click', hideUpdateBanner);
 
 // ── Init ─────────────────────────────────────────────────────────────
 (async function init() {

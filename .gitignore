@@ -11,3 +11,9 @@ compile_commands.json
 *.swp
 *.swo
 *~
+
+# Electron
+electron/node_modules/
+electron/dist/
+electron/out/
+*.asar

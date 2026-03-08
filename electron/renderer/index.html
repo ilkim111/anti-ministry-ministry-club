@@ -25,6 +25,19 @@
     </div>
   </header>
 
+  <!-- ── Update Banner ────────────────────────────────────────── -->
+  <div id="update-banner" class="update-banner" style="display: none;">
+    <span id="update-message"></span>
+    <div id="update-actions">
+      <button id="btn-update-download" class="btn btn-sm btn-primary" style="display: none;">Download</button>
+      <button id="btn-update-install" class="btn btn-sm btn-success" style="display: none;">Restart &amp; Update</button>
+      <button id="btn-update-dismiss" class="btn btn-sm">Dismiss</button>
+    </div>
+    <div id="update-progress" class="update-progress" style="display: none;">
+      <div id="update-progress-bar" class="update-progress-bar"></div>
+    </div>
+  </div>
+
   <!-- ── Config Panel ─────────────────────────────────────────── -->
   <section id="panel-config" class="panel active">
     <div class="panel-header">
@@ -79,9 +92,6 @@
         <legend>LLM Settings</legend>
         <label>Temperature <input type="number" id="cfg-llm_temperature" min="0" max="1" step="0.05"></label>
         <label>Max Tokens <input type="number" id="cfg-llm_max_tokens" min="256" step="256"></label>
-        <label class="checkbox-label">
-          <input type="checkbox" id="cfg-ollama_primary"> Use Ollama as primary LLM
-        </label>
       </fieldset>
 
       <!-- Audio -->
@@ -110,22 +120,54 @@
       </fieldset>
     </div>
 
+    <!-- Local Model -->
+    <div class="config-grid" style="margin-top: 1rem;">
+      <fieldset class="full-width">
+        <legend>Local Model (Ollama)</legend>
+        <div class="local-model-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="cfg-ollama_primary"> Use local model as primary
+          </label>
+          <span id="ollama-status" class="conn-status"></span>
+        </div>
+        <div class="local-model-grid">
+          <label>Ollama Host
+            <div class="input-with-btn">
+              <input type="text" id="cfg-ollama_host" placeholder="http://localhost:11434">
+              <button id="btn-ollama-test" class="btn btn-sm">Test</button>
+            </div>
+          </label>
+          <label>Model
+            <div class="input-with-btn">
+              <select id="cfg-ollama_model">
+                <option value="">-- click Test to discover --</option>
+              </select>
+              <button id="btn-ollama-refresh" class="btn btn-sm">Refresh</button>
+            </div>
+          </label>
+        </div>
+        <div id="ollama-model-info" class="model-info"></div>
+      </fieldset>
+    </div>
+
     <!-- Environment variables -->
     <div class="config-grid" style="margin-top: 1rem;">
       <fieldset class="full-width">
-        <legend>Environment Variables (.env)</legend>
-        <label>Anthropic API Key <input type="password" id="env-ANTHROPIC_API_KEY" placeholder="sk-ant-..."></label>
-        <label>Model <input type="text" id="env-MIXAGENT_MODEL" placeholder="claude-sonnet-4-20250514"></label>
-        <label>Ollama Host <input type="text" id="env-OLLAMA_HOST" placeholder="http://localhost:11434"></label>
-        <label>Fallback Model <input type="text" id="env-MIXAGENT_FALLBACK_MODEL" placeholder="llama3:8b"></label>
-        <label>Log Level
-          <select id="env-MIXAGENT_LOG_LEVEL">
-            <option value="debug">debug</option>
-            <option value="info">info</option>
-            <option value="warn">warn</option>
-            <option value="error">error</option>
-          </select>
-        </label>
+        <legend>API Keys &amp; Environment</legend>
+        <div class="local-model-grid">
+          <label>Anthropic API Key <input type="password" id="env-ANTHROPIC_API_KEY" placeholder="sk-ant-... (optional for local-only)"></label>
+          <label>Cloud Model <input type="text" id="env-MIXAGENT_MODEL" placeholder="claude-sonnet-4-20250514"></label>
+        </div>
+        <div class="local-model-grid">
+          <label>Log Level
+            <select id="env-MIXAGENT_LOG_LEVEL">
+              <option value="debug">debug</option>
+              <option value="info">info</option>
+              <option value="warn">warn</option>
+              <option value="error">error</option>
+            </select>
+          </label>
+        </div>
         <button id="btn-env-save" class="btn btn-secondary" style="margin-top: 0.5rem;">Save .env</button>
       </fieldset>
     </div>
