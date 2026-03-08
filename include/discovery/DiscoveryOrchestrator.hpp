@@ -68,7 +68,7 @@ public:
 
         // 1. Full state sync
         ConsoleDiscovery discovery(adapter_, model_);
-        bool syncOk = discovery.performFullSync(10000);
+        bool syncOk = discovery.performFullSync(30000);
         if (!syncOk)
             spdlog::warn("Partial sync — some channels may be missing data");
 
@@ -78,7 +78,7 @@ public:
         // 3. Capture spectral fingerprints
         auto fingerprints = captureFingerprints(caps.channelCount);
 
-        // 4. Build initial profiles
+        // 4. Build initial profiles (no classification yet)
         std::vector<ChannelProfile> profiles;
         for (int ch = 1; ch <= caps.channelCount; ch++) {
             auto snapshot = model_.channel(ch);
@@ -92,33 +92,51 @@ public:
             profile.highPassHz   = snapshot.hpfFreq;
             profile.fingerprint  = fingerprints[ch - 1];
             profile.discoveredAt = std::chrono::steady_clock::now();
+            profiles.push_back(profile);
+        }
 
-            // 5. Name classification (fast, local)
-            auto nameResult = nameClassifier_.classify(snapshot.name);
-            profile.role       = nameResult.role;
-            profile.group      = nameResult.group;
-            profile.confidence = nameResult.confidence;
+        // 5. LLM-primary classification — send all channel names to LLM
+        bool llmClassified = false;
+        spdlog::info("Starting LLM channel classification...");
+        try {
+            LLMDiscoveryReview review(llm_);
+            profiles = review.review(std::move(profiles));
+            llmClassified = true;
+            spdlog::info("LLM channel classification complete");
+        } catch (const std::exception& e) {
+            spdlog::warn("LLM classification failed: {} — falling back to regex",
+                         e.what());
+        }
 
-            // 6. Spectral override if name was generic/unknown
+        // 6. Regex fallback for any channels the LLM didn't classify
+        for (auto& profile : profiles) {
+            if (profile.role == InstrumentRole::Unknown &&
+                !profile.consoleName.empty()) {
+                auto nameResult = nameClassifier_.classify(profile.consoleName);
+                profile.role       = nameResult.role;
+                profile.group      = nameResult.group;
+                profile.confidence = nameResult.confidence;
+            }
+
+            // 7. Spectral override if still unknown
             if (profile.confidence <= DiscoveryConfidence::Low &&
                 profile.fingerprint.hasSignal) {
                 auto spectralResult =
-                    spectralClassifier_.classify(fingerprints[ch - 1]);
+                    spectralClassifier_.classify(
+                        fingerprints[profile.index - 1]);
                 if (spectralResult.matchScore > 0.6f) {
                     profile.role       = spectralResult.role;
                     profile.group      = spectralResult.group;
                     profile.confidence = DiscoveryConfidence::Medium;
                     spdlog::debug("ch{} '{}': spectral -> {} ({:.0f}%)",
-                                  ch, snapshot.name,
+                                  profile.index, profile.consoleName,
                                   roleToString(spectralResult.role),
                                   spectralResult.matchScore * 100);
                 }
             }
-
-            profiles.push_back(profile);
         }
 
-        // 7. Stereo pair detection
+        // 8. Stereo pair detection
         auto pairs = pairDetector_.detect(profiles);
         for (auto& pair : pairs) {
             profiles[pair.left  - 1].stereoPair = pair.right;
@@ -127,14 +145,14 @@ public:
                          pair.left, pair.right, pair.confidence * 100);
         }
 
-        // 8. Apply local classifications immediately
+        // 9. Apply classifications
         for (auto& p : profiles)
             channelMap_.updateProfile(p);
 
-        spdlog::info("=== Discovery Complete (local) ===");
+        spdlog::info("=== Discovery Complete ===");
         logChannelMap();
 
-        // 9. Ask engineer about unidentified channels with signal
+        // 10. Ask engineer about unidentified channels with signal
         if (onClarificationNeeded) {
             for (auto& p : profiles) {
                 if (p.fingerprint.hasSignal &&
@@ -150,23 +168,6 @@ public:
                 }
             }
         }
-
-        // 10. LLM review pass (async — don't block the show)
-        std::thread([this, profiles]() mutable {
-            spdlog::info("Starting LLM discovery review...");
-            try {
-                LLMDiscoveryReview review(llm_);
-                profiles = review.review(std::move(profiles));
-                for (auto& p : profiles)
-                    channelMap_.updateProfile(p);
-                spdlog::info("LLM discovery review complete");
-                logChannelMap();
-            } catch (const std::exception& e) {
-                spdlog::warn("LLM discovery review failed: {} "
-                             "— proceeding with local classification",
-                             e.what());
-            }
-        }).detach();
     }
 
 private:

@@ -48,25 +48,7 @@ int main(int argc, char* argv[]) {
     // Load .env file
     loadDotEnv(".env");
 
-    // Setup logging
-    auto consoleSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    auto fileSink    = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-        "mixagent.log", 1048576 * 5, 3);  // 5MB, 3 files
-
-    auto logger = std::make_shared<spdlog::logger>(
-        "mixagent",
-        spdlog::sinks_init_list{consoleSink, fileSink});
-    spdlog::set_default_logger(logger);
-
-    std::string logLevel = getEnv("MIXAGENT_LOG_LEVEL", "info");
-    if (logLevel == "debug")      spdlog::set_level(spdlog::level::debug);
-    else if (logLevel == "warn")  spdlog::set_level(spdlog::level::warn);
-    else if (logLevel == "error") spdlog::set_level(spdlog::level::err);
-    else                          spdlog::set_level(spdlog::level::info);
-
-    spdlog::info("MixAgent v0.1.0 starting");
-
-    // Parse CLI arguments
+    // Parse CLI arguments early (need --headless before setting up logging)
     std::string configPath = "config/show.json";
     bool cliHeadless = false;
 
@@ -81,6 +63,29 @@ int main(int argc, char* argv[]) {
             configPath = arg;
         }
     }
+
+    // Setup logging — in headless mode use stderr so stdout is clean JSON for Electron
+    std::shared_ptr<spdlog::sinks::sink> consoleSink;
+    if (cliHeadless) {
+        consoleSink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+    } else {
+        consoleSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    }
+    auto fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+        "mixagent.log", 1048576 * 5, 3);  // 5MB, 3 files
+
+    auto logger = std::make_shared<spdlog::logger>(
+        "mixagent",
+        spdlog::sinks_init_list{consoleSink, fileSink});
+    spdlog::set_default_logger(logger);
+
+    std::string logLevel = getEnv("MIXAGENT_LOG_LEVEL", "info");
+    if (logLevel == "debug")      spdlog::set_level(spdlog::level::debug);
+    else if (logLevel == "warn")  spdlog::set_level(spdlog::level::warn);
+    else if (logLevel == "error") spdlog::set_level(spdlog::level::err);
+    else                          spdlog::set_level(spdlog::level::info);
+
+    spdlog::info("MixAgent v0.1.0 starting");
 
     nlohmann::json config;
     {
@@ -156,10 +161,18 @@ int main(int argc, char* argv[]) {
     agentConfig.headless       = cliHeadless || config.value("headless", false);
 
     // Audio capture config
-    agentConfig.audioChannels   = config.value("audio_channels", 0);
-    agentConfig.audioDeviceId   = config.value("audio_device_id", -1);
-    agentConfig.audioSampleRate = config.value("audio_sample_rate", 48000.0);
-    agentConfig.audioFFTSize    = config.value("audio_fft_size", 1024);
+    agentConfig.audioChannels    = config.value("audio_channels", 0);
+    // Handle audio_device_id as int or string (UI may save as string)
+    if (config.contains("audio_device_id")) {
+        auto& val = config["audio_device_id"];
+        if (val.is_number())
+            agentConfig.audioDeviceId = val.get<int>();
+        else if (val.is_string())
+            agentConfig.audioDeviceId = std::stoi(val.get<std::string>());
+    }
+    agentConfig.audioDeviceName  = config.value("audio_device_name", "");
+    agentConfig.audioSampleRate  = config.value("audio_sample_rate", 48000.0);
+    agentConfig.audioFFTSize     = config.value("audio_fft_size", 1024);
 
     // Genre preset and preference learning
     agentConfig.genre           = config.value("genre", "");

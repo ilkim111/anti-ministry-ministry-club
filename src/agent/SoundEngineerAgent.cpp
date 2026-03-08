@@ -1,6 +1,13 @@
 #include "agent/SoundEngineerAgent.hpp"
 #include "audio/NullAudioCapture.hpp"
 #include <spdlog/spdlog.h>
+#include <iostream>
+
+void SoundEngineerAgent::emitJson(const nlohmann::json& msg) {
+    if (!config_.headless) return;
+    std::lock_guard lock(emitMtx_);
+    std::cout << msg.dump() << "\n" << std::flush;
+}
 
 SoundEngineerAgent::SoundEngineerAgent(
     IConsoleAdapter& adapter,
@@ -92,6 +99,7 @@ bool SoundEngineerAgent::start() {
     if (config_.audioChannels > 0) {
         IAudioCapture::Config audioCfg;
         audioCfg.deviceId       = config_.audioDeviceId;
+        audioCfg.deviceName     = config_.audioDeviceName;
         audioCfg.channelCount   = config_.audioChannels;
         audioCfg.sampleRate     = config_.audioSampleRate;
         audioCfg.framesPerBlock = config_.audioFFTSize;
@@ -164,9 +172,15 @@ void SoundEngineerAgent::stop() {
     running_ = false;
 
     spdlog::info("Agent stopping...");
-    approvalUI_.stop();
 
+    // Clear adapter callbacks before stopping to prevent use-after-free
+    adapter_.onParameterUpdate = nullptr;
+    adapter_.onMeterUpdate = nullptr;
+    adapter_.onConnectionChange = nullptr;
     adapter_.unsubscribeMeter();
+    adapter_.disconnect();
+
+    approvalUI_.stop();
 
     if (audioCapture_ && audioCapture_->isRunning())
         audioCapture_->stop();
@@ -219,6 +233,7 @@ void SoundEngineerAgent::dspLoop() {
     spdlog::debug("DSP thread started");
     auto lastSnapshot = std::chrono::steady_clock::now();
     auto lastStatusRefresh = std::chrono::steady_clock::now();
+    auto lastMeterEmit = std::chrono::steady_clock::now();
 
     while (running_) {
         auto start = std::chrono::steady_clock::now();
@@ -319,6 +334,26 @@ void SoundEngineerAgent::dspLoop() {
             lastStatusRefresh = now;
         }
 
+        // Emit batched meter data to stdout for Electron (every 100ms)
+        auto sinceMeterEmit = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - lastMeterEmit).count();
+        if (sinceMeterEmit >= 100) {
+            auto caps = adapter_.capabilities();
+            nlohmann::json consoleChannels = nlohmann::json::array();
+            for (int ch = 1; ch <= caps.channelCount; ch++) {
+                auto snap = model_.channel(ch);
+                consoleChannels.push_back({
+                    {"index", ch},
+                    {"name", snap.name},
+                    {"rms_db", std::round(snap.rmsDB * 10.0f) / 10.0f},
+                    {"peak_db", std::round(snap.peakDB * 10.0f) / 10.0f}
+                });
+            }
+            emitJson({{"type", "meter_update"},
+                      {"console_channels", consoleChannels}});
+            lastMeterEmit = now;
+        }
+
         // Sleep for remainder of interval
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start).count();
@@ -360,6 +395,8 @@ void SoundEngineerAgent::llmLoop() {
                 if (action.type == ActionType::Observation) {
                     memory_.recordObservation(action.reason);
                     approvalUI_.addLog("LLM: " + action.reason);
+                    emitJson({{"type", "llm_response"},
+                              {"message", action.reason}});
                     continue;
                 }
 
@@ -381,6 +418,17 @@ void SoundEngineerAgent::llmLoop() {
                     }
                 } else {
                     approvalUI_.addLog("Queued: " + action.describe());
+                    {
+                        auto now = std::chrono::steady_clock::now().time_since_epoch();
+                        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+                        std::string actionId = "action-" + std::to_string(ms) + "-" + std::to_string(action.channel);
+                        emitJson({{"type", "approval_request"},
+                                  {"id", actionId},
+                                  {"action", action.describe()},
+                                  {"description", action.describe()},
+                                  {"reason", action.reason},
+                                  {"urgency", static_cast<int>(action.urgency)}});
+                    }
                 }
             }
 
@@ -414,6 +462,8 @@ void SoundEngineerAgent::executionLoop() {
                     memory_.recordAction(vr.clamped,
                                          bridge.buildCompactState());
                     approvalUI_.addLog("Approved: " + vr.clamped.describe());
+                    emitJson({{"type", "action_executed"},
+                              {"action", vr.clamped.describe()}});
 
                     // Learn from approval
                     preferences_.recordApproval(vr.clamped,

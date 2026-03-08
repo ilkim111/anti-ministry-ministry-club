@@ -31,8 +31,9 @@ struct AgentConfig {
     bool headless         = false;  // no UI
 
     // Audio capture config
-    int  audioDeviceId    = -1;    // -1 = default, or specific PortAudio device ID
-    int  audioChannels    = 0;     // 0 = disable audio capture
+    int         audioDeviceId   = -1;    // -1 = default, or specific PortAudio device ID
+    std::string audioDeviceName;         // if set, resolve device by name match
+    int         audioChannels   = 0;     // 0 = disable audio capture
     double audioSampleRate = 48000;
     int  audioFFTSize     = 1024;
 
@@ -81,6 +82,10 @@ private:
 
     // Update connection status indicators in the UI
     void refreshConnectionStatus();
+
+    // Emit JSON line to stdout (headless mode only, for Electron IPC)
+    void emitJson(const nlohmann::json& msg);
+    std::mutex emitMtx_;
 
     // Components
     IConsoleAdapter&   adapter_;

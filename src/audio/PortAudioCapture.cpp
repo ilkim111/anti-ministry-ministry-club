@@ -30,6 +30,26 @@ bool PortAudioCapture::open(const Config& config) {
 
     config_ = config;
 
+    // Resolve device by name if provided
+    if (!config.deviceName.empty() && config.deviceId < 0) {
+        int count = Pa_GetDeviceCount();
+        for (int i = 0; i < count; i++) {
+            const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
+            if (info && info->maxInputChannels > 0) {
+                std::string name(info->name);
+                if (name.find(config.deviceName) != std::string::npos) {
+                    config_.deviceId = i;
+                    spdlog::info("Audio device '{}' matched to ID {}", config.deviceName, i);
+                    break;
+                }
+            }
+        }
+        if (config_.deviceId < 0) {
+            spdlog::error("Audio device '{}' not found", config.deviceName);
+            return false;
+        }
+    }
+
     // Create per-channel ring buffers
     // 2 seconds of buffer at the configured sample rate
     size_t bufSize = (size_t)(config.sampleRate * 2);
@@ -47,8 +67,8 @@ bool PortAudioCapture::open(const Config& config) {
     inputParams.suggestedLatency = 0.020;  // 20ms — reasonable for analysis
     inputParams.hostApiSpecificStreamInfo = nullptr;
 
-    if (config.deviceId >= 0) {
-        inputParams.device = config.deviceId;
+    if (config_.deviceId >= 0) {
+        inputParams.device = config_.deviceId;
     } else {
         inputParams.device = Pa_GetDefaultInputDevice();
         if (inputParams.device == paNoDevice) {
@@ -151,7 +171,7 @@ std::vector<IAudioCapture::DeviceInfo> PortAudioCapture::listDevices() const {
 int PortAudioCapture::paCallback(
     const void* input, void* /*output*/,
     unsigned long frameCount,
-    const void* /*timeInfo*/,
+    const PaStreamCallbackTimeInfo* /*timeInfo*/,
     unsigned long /*statusFlags*/,
     void* userData)
 {
@@ -165,7 +185,7 @@ int PortAudioCapture::handleAudio(const float* input, int frameCount) {
 
 #ifdef HAS_PORTAUDIO
     // Non-interleaved: input is an array of channel pointers
-    auto** channelPtrs = reinterpret_cast<const float* const*>(
+    const float* const* channelPtrs = reinterpret_cast<const float* const*>(
         reinterpret_cast<const void*>(&input));
 
     // Write each channel into its ring buffer

@@ -17,10 +17,11 @@ public:
     };
 
     struct Config {
-        int    deviceId      = -1;    // -1 = default device
-        int    channelCount  = 32;
-        double sampleRate    = 48000;
-        int    framesPerBlock = 1024; // FFT size
+        int         deviceId      = -1;    // -1 = default device
+        std::string deviceName;            // if set, resolve to deviceId by name match
+        int         channelCount  = 32;
+        double      sampleRate    = 48000;
+        int         framesPerBlock = 1024; // FFT size
     };
 
     // Lifecycle

@@ -5,6 +5,11 @@
 #include <memory>
 #include <string>
 #include <atomic>
+#ifdef HAS_PORTAUDIO
+#include <portaudio.h>
+#else
+struct PaStreamCallbackTimeInfo;
+#endif
 
 // PortAudio-based audio capture. Supports ASIO (Windows), Core Audio (macOS),
 // ALSA/PulseAudio (Linux). Link with -lportaudio.
@@ -43,7 +48,7 @@ private:
     // PortAudio stream callback (static → forwards to instance)
     static int paCallback(const void* input, void* output,
                           unsigned long frameCount,
-                          const void* timeInfo,
+                          const PaStreamCallbackTimeInfo* timeInfo,
                           unsigned long statusFlags,
                           void* userData);
 

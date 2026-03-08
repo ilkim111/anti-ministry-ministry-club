@@ -39,6 +39,8 @@ public:
             InstrumentRole::Overhead, "drums", DiscoveryConfidence::High);
         add(R"(room|amb(ience)?|kit.?mic)",
             InstrumentRole::RoomMic, "drums", DiscoveryConfidence::High);
+        add(R"(^drums?\s*[lr12]?$|^dr\s*[lr12]?\s|^dr\s*[lr12]?$|^perc)",
+            InstrumentRole::Overhead, "drums", DiscoveryConfidence::Medium);
 
         // ── Bass ──────────────────────────────────────────────────────
         add(R"(^bass?\s*(d\.?i\.?|direct)?$|b\.d\.i\.?|bgtr)",
@@ -47,13 +49,13 @@ public:
             InstrumentRole::BassAmp, "bass", DiscoveryConfidence::High);
 
         // ── Guitars ───────────────────────────────────────────────────
-        add(R"(^e\.?gtr|elec.?git|e\.?guitar|^gtr\s*[lr12]?$)",
+        add(R"(^e\.?gtr|elec.?git|e\.?guitar|^gtr\s*[lr12]?$|^e\.?g\.?\s*[lr12]?$|^eg\s*[0-9lr])",
             InstrumentRole::ElectricGuitar, "guitars", DiscoveryConfidence::High);
-        add(R"(ac.?git|acoustic|a\.?gtr)",
+        add(R"(ac.?git|acoustic|a\.?gtr|^a\.?g\.?\s*[lr12]?$|^acg)",
             InstrumentRole::AcousticGuitar, "guitars", DiscoveryConfidence::High);
 
         // ── Keys ──────────────────────────────────────────────────────
-        add(R"(^pno$|piano|grand)",
+        add(R"(^pno$|piano\s*[0-9lr]*|grand)",
             InstrumentRole::Piano, "keys", DiscoveryConfidence::High);
         add(R"(^keys?\s*[lr12]?$|keyboard)",
             InstrumentRole::Keys, "keys", DiscoveryConfidence::High);
@@ -63,16 +65,18 @@ public:
             InstrumentRole::Synth, "keys", DiscoveryConfidence::High);
 
         // ── Vocals ────────────────────────────────────────────────────
-        add(R"(^(lead\s*)?vox\s*(l|r|lr|1|2)?$|^(lead\s*)?vocal|^lv$|^ld\.?vx)",
+        add(R"(^(lead\s*)?vox\s*[lr0-9]*$|^(lead\s*)?vocal|^lv$|^ld\.?vx)",
             InstrumentRole::LeadVocal, "vocals", DiscoveryConfidence::High);
         add(R"(bv\s*[1-4lr]?|b\.?v\.|back.?voc|backing|harmony|bg\.?voc)",
             InstrumentRole::BackingVocal, "vocals", DiscoveryConfidence::High);
         add(R"(choir|chorus)",
             InstrumentRole::Choir, "vocals", DiscoveryConfidence::High);
-        add(R"(presenter|speaker|announce|mc$|host)",
+        add(R"(presenter|speaker|announce|^mc$|host|pastor|leader|preacher|worship.?lead)",
             InstrumentRole::Presenter, "vocals", DiscoveryConfidence::High);
-        add(R"(talk.?back|tb$|comm)",
+        add(R"(talk.?back|^tb$|^talkback$|comm)",
             InstrumentRole::Talkback, "talkback", DiscoveryConfidence::High);
+        add(R"(wired\s*mic|mic\s*[0-9]+$)",
+            InstrumentRole::LeadVocal, "vocals", DiscoveryConfidence::Medium);
 
         // ── Brass / Strings ───────────────────────────────────────────
         add(R"(tpt|trumpet|trp)",
@@ -89,6 +93,10 @@ public:
             InstrumentRole::FXReturn, "fx", DiscoveryConfidence::High);
         add(R"(^d\.?i\.?$|direct)",
             InstrumentRole::DI, "misc", DiscoveryConfidence::Medium);
+
+        // ── Broadcast ────────────────────────────────────────────────
+        add(R"(broad(cast)?)",
+            InstrumentRole::DI, "broadcast", DiscoveryConfidence::Low);
 
         // ── Low confidence fallbacks ──────────────────────────────────
         add(R"(^ch\s*\d+$|^input\s*\d+$|^mic\s*\d+$|^\d+$)",

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -41,7 +41,14 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Request microphone permission on macOS (required for PortAudio capture)
+  if (process.platform === 'darwin') {
+    const granted = await systemPreferences.askForMediaAccess('microphone');
+    if (!granted) {
+      console.warn('Microphone permission denied — audio capture will not work');
+    }
+  }
   createWindow();
   initAutoUpdater();
 });

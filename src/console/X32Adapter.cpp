@@ -1,5 +1,6 @@
 #include "console/X32Adapter.hpp"
 #include <spdlog/spdlog.h>
+#include <thread>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -91,10 +92,10 @@ ConsoleCapabilities X32Adapter::capabilities() const {
 }
 
 void X32Adapter::requestFullSync() {
-    // X32 supports /‐‐‐info for bulk dump, but the standard approach
-    // is to request each channel's parameters individually.
+    // X32 has limited OSC throughput — throttle requests to avoid UDP drops.
     // Using /xremote first to establish subscription, then querying.
     sendOscQuery("/xremote");
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     for (int ch = 1; ch <= 32; ch++) {
         // Request channel config block
@@ -125,6 +126,9 @@ void X32Adapter::requestFullSync() {
         sendOscQuery(channelPath(ch, "/gate/thr"));
         sendOscQuery(channelPath(ch, "/gate/range"));
         sendOscQuery(channelPath(ch, "/gate/on"));
+
+        // Throttle: ~20 queries per channel, pause between channels
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     // Buses
@@ -132,6 +136,7 @@ void X32Adapter::requestFullSync() {
         sendOscQuery(busPath(bus, "/config/name"));
         sendOscQuery(busPath(bus, "/mix/fader"));
         sendOscQuery(busPath(bus, "/mix/on"));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 
@@ -556,8 +561,8 @@ void X32Adapter::sendKeepalive() {
 }
 
 void X32Adapter::renewMeterSubscription() {
-    // X32: /meters /0 requests input meters
-    sendOscQuery("/meters");
+    // X32: /meters with int arg 0 subscribes to input meters for ~10s
+    sendOsc("/meters", 0);
     lastMeterRenew_ = std::chrono::steady_clock::now();
 }
 
