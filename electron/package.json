@@ -1,0 +1,50 @@
+{
+  "name": "mixagent-desktop",
+  "version": "1.0.0",
+  "description": "MixAgent Desktop — AI-powered live sound engineering with config management, approval workflow, and chat interface",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build-backend": "cd .. && ./scripts/build.sh",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.mixagent.desktop",
+    "productName": "MixAgent",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../build/MixAgent",
+        "to": "backend/MixAgent"
+      },
+      {
+        "from": "../config",
+        "to": "config"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Audio"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}

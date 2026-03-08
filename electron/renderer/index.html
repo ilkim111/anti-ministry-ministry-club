@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>MixAgent</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- ── Top bar ──────────────────────────────────────────────── -->
+  <header id="topbar">
+    <div class="topbar-left">
+      <span class="logo">MixAgent</span>
+      <span id="backend-status" class="status-badge offline">Offline</span>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-panel="config">Config</button>
+      <button class="tab" data-panel="approval">Approval Queue</button>
+      <button class="tab" data-panel="chat">Chat</button>
+      <button class="tab" data-panel="logs">Logs</button>
+    </nav>
+    <div class="topbar-right">
+      <button id="btn-start" class="btn btn-primary">Start Engine</button>
+      <button id="btn-stop" class="btn btn-danger" disabled>Stop</button>
+    </div>
+  </header>
+
+  <!-- ── Config Panel ─────────────────────────────────────────── -->
+  <section id="panel-config" class="panel active">
+    <div class="panel-header">
+      <h2>Show Configuration</h2>
+      <div class="panel-actions">
+        <select id="config-file-select"></select>
+        <button id="btn-config-save" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+
+    <div class="config-grid">
+      <!-- Console -->
+      <fieldset>
+        <legend>Console</legend>
+        <label>Type
+          <select id="cfg-console_type">
+            <option value="x32">Behringer X32 / Midas M32</option>
+            <option value="wing">Behringer Wing</option>
+            <option value="avantis">Allen &amp; Heath Avantis</option>
+          </select>
+        </label>
+        <label>IP Address <input type="text" id="cfg-console_ip" placeholder="192.168.1.100"></label>
+        <label>Port <input type="number" id="cfg-console_port" placeholder="10023"></label>
+      </fieldset>
+
+      <!-- Timing -->
+      <fieldset>
+        <legend>Timing</legend>
+        <label>DSP Interval (ms) <input type="number" id="cfg-dsp_interval_ms" min="10" step="10"></label>
+        <label>LLM Interval (ms) <input type="number" id="cfg-llm_interval_ms" min="1000" step="500"></label>
+        <label>Meter Refresh (ms) <input type="number" id="cfg-meter_refresh_ms" min="10" step="10"></label>
+      </fieldset>
+
+      <!-- Approval -->
+      <fieldset>
+        <legend>Approval Mode</legend>
+        <label>
+          <select id="cfg-approval_mode">
+            <option value="approve_all">Manual — every action needs approval</option>
+            <option value="auto_urgent">Auto-urgent — auto-approve urgent actions only</option>
+            <option value="auto_all">Auto-all — approve everything (demo mode)</option>
+            <option value="deny_all">Deny-all — reject everything (observe only)</option>
+          </select>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="cfg-headless"> Headless mode (no terminal UI)
+        </label>
+      </fieldset>
+
+      <!-- LLM -->
+      <fieldset>
+        <legend>LLM Settings</legend>
+        <label>Temperature <input type="number" id="cfg-llm_temperature" min="0" max="1" step="0.05"></label>
+        <label>Max Tokens <input type="number" id="cfg-llm_max_tokens" min="256" step="256"></label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="cfg-ollama_primary"> Use Ollama as primary LLM
+        </label>
+      </fieldset>
+
+      <!-- Audio -->
+      <fieldset>
+        <legend>Audio Capture</legend>
+        <label>Audio Channels <input type="number" id="cfg-audio_channels" min="0" placeholder="0 = disabled"></label>
+        <label>Device ID <input type="number" id="cfg-audio_device_id" min="-1" placeholder="-1 = default"></label>
+        <label>Sample Rate <input type="number" id="cfg-audio_sample_rate" step="100"></label>
+        <label>FFT Size <input type="number" id="cfg-audio_fft_size"></label>
+      </fieldset>
+
+      <!-- Genre & Preferences -->
+      <fieldset>
+        <legend>Genre &amp; Preferences</legend>
+        <label>Genre Preset
+          <select id="cfg-genre">
+            <option value="">None</option>
+            <option value="rock">Rock</option>
+            <option value="jazz">Jazz</option>
+            <option value="worship">Worship</option>
+            <option value="edm">EDM</option>
+            <option value="acoustic">Acoustic</option>
+          </select>
+        </label>
+        <label>Preferences File <input type="text" id="cfg-preferences_file" placeholder="path/to/prefs.json"></label>
+      </fieldset>
+    </div>
+
+    <!-- Environment variables -->
+    <div class="config-grid" style="margin-top: 1rem;">
+      <fieldset class="full-width">
+        <legend>Environment Variables (.env)</legend>
+        <label>Anthropic API Key <input type="password" id="env-ANTHROPIC_API_KEY" placeholder="sk-ant-..."></label>
+        <label>Model <input type="text" id="env-MIXAGENT_MODEL" placeholder="claude-sonnet-4-20250514"></label>
+        <label>Ollama Host <input type="text" id="env-OLLAMA_HOST" placeholder="http://localhost:11434"></label>
+        <label>Fallback Model <input type="text" id="env-MIXAGENT_FALLBACK_MODEL" placeholder="llama3:8b"></label>
+        <label>Log Level
+          <select id="env-MIXAGENT_LOG_LEVEL">
+            <option value="debug">debug</option>
+            <option value="info">info</option>
+            <option value="warn">warn</option>
+            <option value="error">error</option>
+          </select>
+        </label>
+        <button id="btn-env-save" class="btn btn-secondary" style="margin-top: 0.5rem;">Save .env</button>
+      </fieldset>
+    </div>
+  </section>
+
+  <!-- ── Approval Queue Panel ────────────────────────────────── -->
+  <section id="panel-approval" class="panel">
+    <div class="panel-header">
+      <h2>Approval Queue</h2>
+      <div class="panel-actions">
+        <span id="approval-count" class="badge">0 pending</span>
+        <select id="approval-mode-live">
+          <option value="approve_all">Manual</option>
+          <option value="auto_urgent">Auto-urgent</option>
+          <option value="auto_all">Auto-all</option>
+          <option value="deny_all">Deny-all</option>
+        </select>
+        <button id="btn-approve-all" class="btn btn-success">Approve All</button>
+        <button id="btn-reject-all" class="btn btn-danger">Reject All</button>
+      </div>
+    </div>
+
+    <div id="approval-list" class="approval-list">
+      <div class="empty-state">No pending actions. Start the engine to begin receiving LLM mix decisions.</div>
+    </div>
+
+    <!-- Action history -->
+    <div class="panel-header" style="margin-top: 1rem;">
+      <h3>Action History</h3>
+      <button id="btn-clear-history" class="btn btn-sm">Clear</button>
+    </div>
+    <div id="action-history" class="action-history">
+      <div class="empty-state">No actions yet.</div>
+    </div>
+  </section>
+
+  <!-- ── Chat Panel ──────────────────────────────────────────── -->
+  <section id="panel-chat" class="panel">
+    <div class="panel-header">
+      <h2>Engineer Chat</h2>
+      <span class="hint">Send instructions to the LLM mix agent in real time</span>
+    </div>
+
+    <div id="chat-messages" class="chat-messages">
+      <div class="chat-msg system">
+        <strong>System:</strong> Send mix instructions to the AI agent. Examples: "bring up the vocals", "more reverb on snare", "cut low-mids on guitar".
+      </div>
+    </div>
+
+    <form id="chat-form" class="chat-input-bar">
+      <input type="text" id="chat-input" placeholder="Type mix instructions..." autocomplete="off">
+      <button type="submit" class="btn btn-primary">Send</button>
+    </form>
+  </section>
+
+  <!-- ── Logs Panel ──────────────────────────────────────────── -->
+  <section id="panel-logs" class="panel">
+    <div class="panel-header">
+      <h2>Backend Logs</h2>
+      <button id="btn-clear-logs" class="btn btn-sm">Clear</button>
+    </div>
+    <pre id="log-output" class="log-output"></pre>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

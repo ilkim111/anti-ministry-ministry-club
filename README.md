@@ -114,6 +114,10 @@ src/             Implementation files
 config/          Console-specific JSON configs
 scripts/         Build, run, network setup, pre-show checks
 tests/           Unit tests (gtest)
+electron/        Desktop app (Electron)
+  main.js        Main process — backend lifecycle, IPC handlers
+  preload.js     Context bridge API exposed to renderer
+  renderer/      HTML/CSS/JS frontend (config, approval, chat)
 ```
 
 ## Configuration
@@ -153,6 +157,74 @@ Dependencies are fetched automatically via CMake FetchContent:
 - [nlohmann/json](https://github.com/nlohmann/json) — JSON
 - [cpp-httplib](https://github.com/yhirose/cpp-httplib) — HTTP client
 - [spdlog](https://github.com/gabime/spdlog) — logging
+
+## Electron Desktop App
+
+A desktop GUI that wraps the C++ backend with a modern interface for config
+management, the approval workflow, and an engineer chat panel.
+
+### Setup
+
+```bash
+cd electron
+npm install
+```
+
+### Development
+
+```bash
+# Build the C++ backend first
+npm run build-backend
+
+# Launch the desktop app
+npm start
+```
+
+### Features
+
+- **Config Editor** — edit `show.json`, console settings, approval modes, LLM
+  settings, and `.env` variables from the GUI. Switch between console configs
+  (X32, Wing, Avantis) with a dropdown.
+- **Approval Queue** — view pending LLM mix actions with urgency badges,
+  approve/reject individually or in batch, change approval mode on the fly.
+- **Engineer Chat** — send real-time mix instructions to the LLM agent
+  ("bring up the vocals", "more reverb on snare") and see responses.
+- **Backend Logs** — live log stream from the C++ engine.
+- **Packaging** — build distributable apps for macOS, Windows, and Linux via
+  electron-builder.
+
+### Packaging
+
+```bash
+npm run dist            # Build for current platform
+npm run dist:mac        # macOS (.dmg, .zip)
+npm run dist:win        # Windows (.exe, portable)
+npm run dist:linux      # Linux (.AppImage, .deb)
+```
+
+### Architecture
+
+The Electron app communicates with the C++ backend via `stdin`/`stdout` JSON
+messages. The main process spawns `MixAgent --headless` and relays structured
+events (approval requests, meter updates, LLM responses) to the renderer via
+IPC. Engineer commands flow back through `stdin`.
+
+```
+┌─────────────────────────────────────────────┐
+│  Electron Renderer (HTML/CSS/JS)            │
+│  ┌──────────┬──────────────┬──────────┐     │
+│  │  Config   │  Approval    │  Chat    │     │
+│  │  Editor   │  Queue       │  Panel   │     │
+│  └──────────┴──────────────┴──────────┘     │
+│                    │ IPC                     │
+├─────────────────────────────────────────────┤
+│  Electron Main Process                      │
+│      │ stdin/stdout JSON                    │
+├─────────────────────────────────────────────┤
+│  MixAgent C++ Backend (--headless)          │
+│  DSP ─── LLM ─── Approval ─── Execution    │
+└─────────────────────────────────────────────┘
+```
 
 ## License
 
