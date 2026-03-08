@@ -17,3 +17,6 @@ electron/node_modules/
 electron/dist/
 electron/out/
 *.asar
+
+.omc
+.log

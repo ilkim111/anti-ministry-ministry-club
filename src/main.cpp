@@ -66,9 +66,21 @@ int main(int argc, char* argv[]) {
 
     spdlog::info("MixAgent v0.1.0 starting");
 
-    // Load show config
+    // Parse CLI arguments
     std::string configPath = "config/show.json";
-    if (argc > 1) configPath = argv[1];
+    bool cliHeadless = false;
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--headless") {
+            cliHeadless = true;
+        } else if (arg == "--config" && i + 1 < argc) {
+            configPath = argv[++i];
+        } else if (arg[0] != '-') {
+            // Bare argument treated as config path (backward compat)
+            configPath = arg;
+        }
+    }
 
     nlohmann::json config;
     {
@@ -141,7 +153,7 @@ int main(int argc, char* argv[]) {
     agentConfig.dspIntervalMs  = config.value("dsp_interval_ms", 50);
     agentConfig.llmIntervalMs  = config.value("llm_interval_ms", 5000);
     agentConfig.meterRefreshMs = config.value("meter_refresh_ms", 50);
-    agentConfig.headless       = config.value("headless", false);
+    agentConfig.headless       = cliHeadless || config.value("headless", false);
 
     // Audio capture config
     agentConfig.audioChannels   = config.value("audio_channels", 0);

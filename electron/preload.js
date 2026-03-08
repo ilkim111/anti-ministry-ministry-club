@@ -47,6 +47,24 @@ contextBridge.exposeInMainWorld('mixagent', {
     testConnection: (host)      => ipcRenderer.invoke('ollama:testConnection', host),
   },
 
+  // Console connection test
+  consoleTest: {
+    testConnection: (opts)      => ipcRenderer.invoke('console:testConnection', opts),
+  },
+
+  // Audio device detection
+  audio: {
+    testDevices: ()             => ipcRenderer.invoke('audio:testDevices'),
+  },
+
+  // Demo mode
+  demo: {
+    start: ()                   => ipcRenderer.invoke('demo:start'),
+    stop: ()                    => ipcRenderer.invoke('demo:stop'),
+    onTick: (cb)                => ipcRenderer.on('demo:tick', (_e, data) => cb(data)),
+    onStopped: (cb)             => ipcRenderer.on('demo:stopped', () => cb()),
+  },
+
   // Auto-updater
   updater: {
     check: ()                   => ipcRenderer.invoke('updater:check'),

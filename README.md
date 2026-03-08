@@ -149,9 +149,20 @@ in `show.json` or via the desktop app's **Local Model** panel.
 Requires CMake 3.20+ and a C++20 compiler.
 
 ```bash
+# Install dependencies (macOS)
+brew install cmake
+
 ./scripts/build.sh           # Release build
 ./scripts/build.sh Debug     # Debug build with symbols
 ```
+
+> **macOS troubleshooting:** If the build fails with `'cstdint' file not found` or
+> similar missing C++ headers, the build script will auto-detect this and add the
+> SDK include path. If that doesn't work, reinstall the Command Line Tools:
+> ```bash
+> sudo rm -rf /Library/Developer/CommandLineTools
+> xcode-select --install
+> ```
 
 Dependencies are fetched automatically via CMake FetchContent:
 - [ftxui](https://github.com/ArthurSonzogni/FTXUI) — terminal UI

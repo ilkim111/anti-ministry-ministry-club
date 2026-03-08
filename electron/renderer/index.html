@@ -15,11 +15,13 @@
     </div>
     <nav class="tabs">
       <button class="tab active" data-panel="config">Config</button>
+      <button class="tab" data-panel="meters">Meters</button>
       <button class="tab" data-panel="approval">Approval Queue</button>
       <button class="tab" data-panel="chat">Chat</button>
       <button class="tab" data-panel="logs">Logs</button>
     </nav>
     <div class="topbar-right">
+      <button id="btn-demo" class="btn btn-secondary">Demo</button>
       <button id="btn-start" class="btn btn-primary">Start Engine</button>
       <button id="btn-stop" class="btn btn-danger" disabled>Stop</button>
     </div>
@@ -52,6 +54,10 @@
       <!-- Console -->
       <fieldset>
         <legend>Console</legend>
+        <div class="local-model-row">
+          <span style="font-size:12px; color: var(--text-dim);">Network connection</span>
+          <span id="console-conn-status" class="conn-status"></span>
+        </div>
         <label>Type
           <select id="cfg-console_type">
             <option value="x32">Behringer X32 / Midas M32</option>
@@ -59,8 +65,14 @@
             <option value="avantis">Allen &amp; Heath Avantis</option>
           </select>
         </label>
-        <label>IP Address <input type="text" id="cfg-console_ip" placeholder="192.168.1.100"></label>
+        <label>IP Address
+          <div class="input-with-btn">
+            <input type="text" id="cfg-console_ip" placeholder="192.168.1.100">
+            <button id="btn-console-test" class="btn btn-sm">Test</button>
+          </div>
+        </label>
         <label>Port <input type="number" id="cfg-console_port" placeholder="10023"></label>
+        <div id="console-conn-info" class="model-info"></div>
       </fieldset>
 
       <!-- Timing -->
@@ -97,8 +109,20 @@
       <!-- Audio -->
       <fieldset>
         <legend>Audio Capture</legend>
+        <div class="local-model-row">
+          <span style="font-size:12px; color: var(--text-dim);">USB / Dante devices</span>
+          <span id="audio-conn-status" class="conn-status"></span>
+        </div>
+        <label>Device
+          <div class="input-with-btn">
+            <select id="cfg-audio_device_id">
+              <option value="-1">Default — click Detect to discover</option>
+            </select>
+            <button id="btn-audio-test" class="btn btn-sm">Detect</button>
+          </div>
+        </label>
+        <div id="audio-device-list" class="model-info"></div>
         <label>Audio Channels <input type="number" id="cfg-audio_channels" min="0" placeholder="0 = disabled"></label>
-        <label>Device ID <input type="number" id="cfg-audio_device_id" min="-1" placeholder="-1 = default"></label>
         <label>Sample Rate <input type="number" id="cfg-audio_sample_rate" step="100"></label>
         <label>FFT Size <input type="number" id="cfg-audio_fft_size"></label>
       </fieldset>
@@ -170,6 +194,30 @@
         </div>
         <button id="btn-env-save" class="btn btn-secondary" style="margin-top: 0.5rem;">Save .env</button>
       </fieldset>
+    </div>
+  </section>
+
+  <!-- ── Meters Panel ──────────────────────────────────────────── -->
+  <section id="panel-meters" class="panel">
+    <div class="panel-header">
+      <h2>Meters</h2>
+      <div class="panel-actions">
+        <span id="meters-status" class="hint">Waiting for engine...</span>
+      </div>
+    </div>
+
+    <div class="meters-section">
+      <h3 class="meters-heading">Console Channels (OSC)</h3>
+      <div id="meters-console" class="meter-strip">
+        <div class="empty-state">Start the engine to see console meters.</div>
+      </div>
+    </div>
+
+    <div class="meters-section" style="margin-top: 1.5rem;">
+      <h3 class="meters-heading">Audio Input (USB / Dante)</h3>
+      <div id="meters-audio" class="meter-strip">
+        <div class="empty-state">Enable audio capture in Config to see input meters.</div>
+      </div>
     </div>
   </section>
 

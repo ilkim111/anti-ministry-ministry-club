@@ -226,6 +226,111 @@ $('#cfg-ollama_primary').addEventListener('change', () => {
   updateOllamaPrimaryUI();
 });
 
+// ── Console: test connection ─────────────────────────────────────────
+async function testConsoleConnection() {
+  const ip = $('#cfg-console_ip').value.trim();
+  const port = parseInt($('#cfg-console_port').value) || 0;
+  const consoleType = $('#cfg-console_type').value;
+  const statusEl = $('#console-conn-status');
+  const infoEl = $('#console-conn-info');
+  const btn = $('#btn-console-test');
+
+  if (!ip) {
+    showToast('Enter a console IP address first', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '...';
+  statusEl.textContent = 'connecting...';
+  statusEl.className = 'conn-status conn-testing';
+  infoEl.textContent = '';
+
+  const res = await window.mixagent.consoleTest.testConnection({ ip, port, consoleType });
+
+  btn.disabled = false;
+  btn.textContent = 'Test';
+
+  if (res.ok) {
+    statusEl.textContent = `reachable (${res.protocol.toUpperCase()})`;
+    statusEl.className = 'conn-status conn-ok';
+    infoEl.textContent = '';
+    showToast(`Console reachable at ${ip} via ${res.protocol.toUpperCase()}`);
+  } else {
+    statusEl.textContent = 'unreachable';
+    statusEl.className = 'conn-status conn-fail';
+    infoEl.textContent = res.error;
+    showToast('Console connection failed', 'error');
+  }
+}
+
+$('#btn-console-test').addEventListener('click', testConsoleConnection);
+
+// ── Audio: detect devices ───────────────────────────────────────────
+async function testAudioDevices() {
+  const statusEl = $('#audio-conn-status');
+  const listEl = $('#audio-device-list');
+  const btn = $('#btn-audio-test');
+
+  btn.disabled = true;
+  btn.textContent = '...';
+  statusEl.textContent = 'scanning...';
+  statusEl.className = 'conn-status conn-testing';
+
+  const res = await window.mixagent.audio.testDevices();
+
+  btn.disabled = false;
+  btn.textContent = 'Detect Devices';
+
+  if (res.ok && res.devices.length > 0) {
+    statusEl.textContent = `${res.devices.length} device(s)`;
+    statusEl.className = 'conn-status conn-ok';
+    listEl.textContent = '';
+    populateAudioDevices(res.devices);
+    showToast(`Found ${res.devices.length} audio device(s)`);
+  } else if (res.ok) {
+    statusEl.textContent = 'no devices';
+    statusEl.className = 'conn-status conn-fail';
+    listEl.textContent = 'No audio input devices detected. Check USB/Dante connections.';
+    showToast('No audio devices found', 'error');
+  } else {
+    statusEl.textContent = 'error';
+    statusEl.className = 'conn-status conn-fail';
+    listEl.textContent = res.error;
+    showToast('Audio detection failed', 'error');
+  }
+}
+
+function populateAudioDevices(devices) {
+  const sel = $('#cfg-audio_device_id');
+  const current = sel.value || '-1';
+
+  // Clear existing options safely
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+
+  // Default option
+  const defOpt = document.createElement('option');
+  defOpt.value = '-1';
+  defOpt.textContent = 'Default (system)';
+  sel.appendChild(defOpt);
+
+  for (const d of devices) {
+    const opt = document.createElement('option');
+    opt.value = String(d.id);
+    opt.textContent = d.name;
+    sel.appendChild(opt);
+  }
+
+  // Restore previous selection if it exists
+  if (current !== '-1') {
+    for (const opt of sel.options) {
+      if (opt.value === current) { sel.value = current; return; }
+    }
+  }
+}
+
+$('#btn-audio-test').addEventListener('click', testAudioDevices);
+
 // ── Backend start/stop ───────────────────────────────────────────────
 function setRunning(running) {
   isRunning = running;
@@ -467,6 +572,99 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// ── Meters ───────────────────────────────────────────────────────────
+function dbToPercent(db) {
+  // Map dB to 0-100%: -60dB = 0%, 0dB = 100%
+  if (db <= -60) return 0;
+  if (db >= 0) return 100;
+  return ((db + 60) / 60) * 100;
+}
+
+function getMeterClass(db) {
+  if (db >= -1) return 'signal-clip';
+  if (db >= -6) return 'signal-hot';
+  return '';
+}
+
+function renderMeterStrip(containerId, channels) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // Build meter DOM on first call or channel count change
+  if (container.dataset.count !== String(channels.length)) {
+    // Clear safely
+    while (container.firstChild) container.removeChild(container.firstChild);
+    container.dataset.count = String(channels.length);
+
+    for (const ch of channels) {
+      const col = document.createElement('div');
+      col.className = 'meter-channel';
+      col.dataset.idx = ch.index;
+
+      const dbLabel = document.createElement('span');
+      dbLabel.className = 'meter-db';
+      dbLabel.textContent = '--';
+
+      const track = document.createElement('div');
+      track.className = 'meter-bar-track';
+
+      const fill = document.createElement('div');
+      fill.className = 'meter-bar-fill';
+      fill.style.height = '0%';
+
+      const peak = document.createElement('div');
+      peak.className = 'meter-peak';
+      peak.style.bottom = '0%';
+
+      track.appendChild(fill);
+      track.appendChild(peak);
+
+      const label = document.createElement('span');
+      label.className = 'meter-label';
+      label.textContent = ch.name || ch.index;
+      label.title = ch.name || `Ch ${ch.index}`;
+
+      col.appendChild(dbLabel);
+      col.appendChild(track);
+      col.appendChild(label);
+      container.appendChild(col);
+    }
+    return;
+  }
+
+  // Update existing meters
+  const cols = container.querySelectorAll('.meter-channel');
+  for (let i = 0; i < channels.length && i < cols.length; i++) {
+    const ch = channels[i];
+    const col = cols[i];
+    const fill = col.querySelector('.meter-bar-fill');
+    const peak = col.querySelector('.meter-peak');
+    const dbLabel = col.querySelector('.meter-db');
+
+    const rmsPercent = dbToPercent(ch.rms_db ?? -60);
+    const peakPercent = dbToPercent(ch.peak_db ?? -60);
+
+    fill.style.height = rmsPercent + '%';
+    fill.className = 'meter-bar-fill ' + getMeterClass(ch.rms_db ?? -60);
+    peak.style.bottom = peakPercent + '%';
+
+    const dbVal = ch.rms_db ?? -60;
+    dbLabel.textContent = dbVal <= -60 ? '-inf' : Math.round(dbVal);
+  }
+}
+
+window.mixagent.meters.onUpdate((data) => {
+  $('#meters-status').textContent = 'Live';
+
+  if (data.console_channels) {
+    renderMeterStrip('meters-console', data.console_channels);
+  }
+
+  if (data.audio_channels) {
+    renderMeterStrip('meters-audio', data.audio_channels);
+  }
+});
+
 // ── Auto-updater UI ──────────────────────────────────────────────────
 function showUpdateBanner(msg, { download = false, install = false } = {}) {
   const banner = $('#update-banner');
@@ -516,6 +714,58 @@ $('#btn-update-install').addEventListener('click', () => {
 });
 
 $('#btn-update-dismiss').addEventListener('click', hideUpdateBanner);
+
+// ── Demo mode ────────────────────────────────────────────────────────
+let demoActive = false;
+
+function setDemoState(active) {
+  demoActive = active;
+  const btn = $('#btn-demo');
+  const badge = $('#backend-status');
+  if (active) {
+    btn.textContent = 'Stop Demo';
+    btn.className = 'btn btn-danger';
+    badge.textContent = 'Demo';
+    badge.className = 'status-badge running';
+    $('#btn-start').disabled = true;
+    // Switch to meters tab to show the action
+    document.querySelector('[data-panel="meters"]').click();
+  } else {
+    btn.textContent = 'Demo';
+    btn.className = 'btn btn-secondary';
+    if (!isRunning) {
+      badge.textContent = 'Offline';
+      badge.className = 'status-badge offline';
+    }
+    $('#btn-start').disabled = isRunning;
+    $('#meters-status').textContent = 'Waiting for engine...';
+  }
+}
+
+$('#btn-demo').addEventListener('click', async () => {
+  if (demoActive) {
+    await window.mixagent.demo.stop();
+    setDemoState(false);
+    showToast('Demo stopped');
+  } else {
+    const res = await window.mixagent.demo.start();
+    if (res.ok) {
+      setDemoState(true);
+      showToast('Demo started — 60s of simulated mix data');
+    } else {
+      showToast(res.error, 'error');
+    }
+  }
+});
+
+window.mixagent.demo.onTick((data) => {
+  $('#meters-status').textContent = `Demo: ${data.remaining}s remaining`;
+});
+
+window.mixagent.demo.onStopped(() => {
+  setDemoState(false);
+  showToast('Demo finished');
+});
 
 // ── Init ─────────────────────────────────────────────────────────────
 (async function init() {
