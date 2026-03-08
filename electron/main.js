@@ -15,10 +15,11 @@ function resolveConfigDir() {
 }
 
 function resolveBackendPath() {
+  const bin = process.platform === 'win32' ? 'mixagent.exe' : 'mixagent';
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'backend', 'MixAgent');
+    return path.join(process.resourcesPath, 'backend', bin);
   }
-  return path.join(__dirname, '..', 'build', 'MixAgent');
+  return path.join(__dirname, '..', 'build', bin);
 }
 
 function createWindow() {
@@ -73,7 +74,9 @@ ipcMain.handle('config:save', async (_event, config) => {
 });
 
 ipcMain.handle('config:loadEnv', async () => {
-  const envPath = path.join(__dirname, '..', '.env');
+  const envPath = app.isPackaged
+    ? path.join(app.getPath('userData'), '.env')
+    : path.join(__dirname, '..', '.env');
   try {
     const raw = fs.readFileSync(envPath, 'utf-8');
     const env = {};
@@ -92,7 +95,9 @@ ipcMain.handle('config:loadEnv', async () => {
 });
 
 ipcMain.handle('config:saveEnv', async (_event, envObj) => {
-  const envPath = path.join(__dirname, '..', '.env');
+  const envPath = app.isPackaged
+    ? path.join(app.getPath('userData'), '.env')
+    : path.join(__dirname, '..', '.env');
   try {
     const lines = Object.entries(envObj).map(([k, v]) => `${k}=${v}`);
     fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf-8');
@@ -140,10 +145,27 @@ ipcMain.handle('backend:start', async () => {
     return { ok: false, error: `Backend binary not found at ${binPath}. Run "npm run build-backend" first.` };
   }
 
+  // Load .env and merge into backend process environment
+  const envPath = app.isPackaged
+    ? path.join(app.getPath('userData'), '.env')
+    : path.join(__dirname, '..', '.env');
+  const extraEnv = {};
+  try {
+    const raw = fs.readFileSync(envPath, 'utf-8');
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx > 0) {
+        extraEnv[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim();
+      }
+    }
+  } catch { /* no .env file, that's fine */ }
+
   const configDir = resolveConfigDir();
   backendProcess = spawn(binPath, ['--headless', '--config', path.join(configDir, 'show.json')], {
-    cwd: path.join(__dirname, '..'),
-    env: { ...process.env },
+    cwd: app.isPackaged ? process.resourcesPath : path.join(__dirname, '..'),
+    env: { ...process.env, ...extraEnv },
     stdio: ['pipe', 'pipe', 'pipe']
   });
 
