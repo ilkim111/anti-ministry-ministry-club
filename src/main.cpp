@@ -9,6 +9,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <fstream>
+#include <iostream>
 #include <memory>
 #include <csignal>
 #include <cstdlib>
@@ -219,6 +220,11 @@ int main(int argc, char* argv[]) {
     }
 
     spdlog::info("Agent running — press Ctrl+C to stop");
+
+    // Emit a test message to verify stdout JSON pipeline
+    if (agentConfig.headless) {
+        std::cout << R"({"type":"status","message":"engine_ready"})" << "\n" << std::flush;
+    }
 
     // If headless, just block on signal
     if (agentConfig.headless) {

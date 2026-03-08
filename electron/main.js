@@ -180,10 +180,14 @@ ipcMain.handle('backend:start', async () => {
     stdio: ['pipe', 'pipe', 'pipe']
   });
 
+  let stdoutBuffer = '';
   backendProcess.stdout.on('data', (data) => {
-    const lines = data.toString().split('\n').filter(Boolean);
+    stdoutBuffer += data.toString();
+    const lines = stdoutBuffer.split('\n');
+    // Keep the last (possibly incomplete) chunk in the buffer
+    stdoutBuffer = lines.pop() || '';
     for (const line of lines) {
-      // Parse structured log lines from the backend
+      if (!line) continue;
       try {
         const parsed = JSON.parse(line);
         if (parsed.type === 'approval_request') {

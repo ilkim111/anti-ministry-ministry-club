@@ -5,8 +5,12 @@
 
 void SoundEngineerAgent::emitJson(const nlohmann::json& msg) {
     if (!config_.headless) return;
-    std::lock_guard lock(emitMtx_);
-    std::cout << msg.dump() << "\n" << std::flush;
+    try {
+        std::lock_guard lock(emitMtx_);
+        std::cout << msg.dump() << "\n" << std::flush;
+    } catch (const std::exception& e) {
+        spdlog::warn("emitJson failed: {}", e.what());
+    }
 }
 
 SoundEngineerAgent::SoundEngineerAgent(
