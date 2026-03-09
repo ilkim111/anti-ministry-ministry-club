@@ -3,8 +3,10 @@
 #include <string>
 #include <thread>
 #include <atomic>
+#include <chrono>
 
-// Behringer Wing adapter — same OSC transport, different address scheme
+// Behringer Wing adapter — OSC on port 2223, different address scheme from X32
+// Wing uses /ch/N/fdr (dB values), /ch/N/mute (1=muted), etc.
 class WingAdapter : public IConsoleAdapter {
 public:
     WingAdapter();
@@ -32,23 +34,26 @@ private:
     void sendOsc(const std::string& address, float value);
     void sendOsc(const std::string& address, int value);
     void sendOsc(const std::string& address, const std::string& value);
+    void sendOscQuery(const std::string& address);
     void sendRaw(const std::vector<uint8_t>& data);
 
-    // Wing uses /ch/XX/... with 1-based indexing and different parameter paths
+    // Wing uses /ch/N/... (1-based, no zero-padding)
     std::string channelPath(int ch, const std::string& suffix);
     std::string busPath(int bus, const std::string& suffix);
 
     void receiveLoop();
     void parseOscMessage(const uint8_t* data, size_t len);
+    void handleParameterMessage(const std::string& address, const ParamValue& value);
     void sendKeepalive();
 
     int  sockFd_ = -1;
     std::string ip_;
-    int  port_ = 2222;    // Wing default OSC port
+    int  port_ = 2223;    // Wing OSC port (2222=native, 2223=OSC)
     std::atomic<bool> connected_{false};
     std::atomic<bool> running_{false};
     std::thread recvThread_;
 
     std::chrono::steady_clock::time_point lastKeepalive_;
+    std::chrono::steady_clock::time_point lastMeterRenew_;
     bool metering_ = false;
 };

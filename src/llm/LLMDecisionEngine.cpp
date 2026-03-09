@@ -24,10 +24,16 @@ std::vector<MixAction> LLMDecisionEngine::decideMixActions(
 }
 
 std::string LLMDecisionEngine::callRaw(const std::string& systemPrompt,
-                                         const std::string& userMessage)
+                                         const std::string& userMessage,
+                                         int maxTokensOverride)
 {
     totalCalls_++;
     auto start = std::chrono::steady_clock::now();
+
+    // Temporarily override maxTokens if requested
+    int origMaxTokens = config_.maxTokens;
+    if (maxTokensOverride > 0)
+        config_.maxTokens = maxTokensOverride;
 
     std::string response;
     bool success = false;
@@ -46,17 +52,35 @@ std::string LLMDecisionEngine::callRaw(const std::string& systemPrompt,
                 response = callAnthropic(systemPrompt, userMessage);
                 success = true;
             } catch (const std::exception& e) {
-                spdlog::error("Anthropic fallback also failed: {}", e.what());
+                spdlog::warn("Anthropic fallback failed: {}", e.what());
+            }
+        }
+
+        if (!success && !config_.openaiApiKey.empty()) {
+            try {
+                response = callOpenAI(systemPrompt, userMessage);
+                success = true;
+            } catch (const std::exception& e) {
+                spdlog::error("OpenAI fallback also failed: {}", e.what());
             }
         }
     } else {
-        // Default: try Anthropic first, fall back to Ollama
+        // Default: try Anthropic first, then OpenAI, then Ollama
         if (!config_.anthropicApiKey.empty()) {
             try {
                 response = callAnthropic(systemPrompt, userMessage);
                 success = true;
             } catch (const std::exception& e) {
                 spdlog::warn("Anthropic call failed: {}", e.what());
+            }
+        }
+
+        if (!success && !config_.openaiApiKey.empty()) {
+            try {
+                response = callOpenAI(systemPrompt, userMessage);
+                success = true;
+            } catch (const std::exception& e) {
+                spdlog::warn("OpenAI fallback failed: {}", e.what());
             }
         }
 
@@ -69,6 +93,9 @@ std::string LLMDecisionEngine::callRaw(const std::string& systemPrompt,
             }
         }
     }
+
+    // Restore original maxTokens
+    config_.maxTokens = origMaxTokens;
 
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - start).count();
@@ -91,8 +118,8 @@ std::string LLMDecisionEngine::callAnthropic(
     httplib::Client cli("https://api.anthropic.com");
     cli.set_connection_timeout(config_.timeoutMs / 1000,
                                 (config_.timeoutMs % 1000) * 1000);
-    cli.set_read_timeout(config_.timeoutMs / 1000,
-                          (config_.timeoutMs % 1000) * 1000);
+    cli.set_read_timeout(30, 0);  // 30s read timeout — LLM responses can be slow
+    cli.enable_server_certificate_verification(false);  // macOS Homebrew OpenSSL lacks system CA bundle
 
     nlohmann::json body = {
         {"model",       config_.anthropicModel},
@@ -114,17 +141,72 @@ std::string LLMDecisionEngine::callAnthropic(
     auto res = cli.Post("/v1/messages", headers,
                          body.dump(), "application/json");
 
-    if (!res || res->status != 200) {
-        int status = res ? res->status : 0;
-        std::string errBody = res ? res->body : "no response";
+    if (!res) {
+        auto err = res.error();
+        std::string errMsg;
+        switch (err) {
+            case httplib::Error::Connection:        errMsg = "connection failed"; break;
+            case httplib::Error::ConnectionTimeout:  errMsg = "connection timeout"; break;
+            case httplib::Error::Read:              errMsg = "read timeout"; break;
+            case httplib::Error::Write:             errMsg = "write error"; break;
+            case httplib::Error::SSLConnection:     errMsg = "SSL connection failed"; break;
+            case httplib::Error::SSLServerVerification: errMsg = "SSL cert verification failed"; break;
+            default:                                errMsg = "error code " + std::to_string(static_cast<int>(err)); break;
+        }
+        throw std::runtime_error("Anthropic request failed: " + errMsg);
+    }
+    if (res->status != 200) {
         throw std::runtime_error(
-            "Anthropic API error " + std::to_string(status) +
-            ": " + errBody.substr(0, 200));
+            "Anthropic API error " + std::to_string(res->status) +
+            ": " + res->body.substr(0, 200));
     }
 
     auto j = nlohmann::json::parse(res->body);
     if (j.contains("content") && !j["content"].empty())
         return j["content"][0]["text"].get<std::string>();
+
+    return res->body;
+}
+
+std::string LLMDecisionEngine::callOpenAI(
+    const std::string& systemPrompt,
+    const std::string& userMessage)
+{
+    httplib::Client cli("https://api.openai.com");
+    cli.set_connection_timeout(config_.timeoutMs / 1000,
+                                (config_.timeoutMs % 1000) * 1000);
+    cli.set_read_timeout(30, 0);
+    cli.enable_server_certificate_verification(false);
+
+    nlohmann::json body = {
+        {"model",       config_.openaiModel},
+        {"max_tokens",  config_.maxTokens},
+        {"temperature", config_.temperature},
+        {"messages", {
+            {{"role", "system"}, {"content", systemPrompt}},
+            {{"role", "user"},   {"content", userMessage}}
+        }}
+    };
+
+    httplib::Headers headers = {
+        {"Authorization", "Bearer " + config_.openaiApiKey},
+        {"content-type",  "application/json"}
+    };
+
+    auto res = cli.Post("/v1/chat/completions", headers,
+                         body.dump(), "application/json");
+
+    if (!res || res->status != 200) {
+        int status = res ? res->status : 0;
+        std::string errBody = res ? res->body : "no response";
+        throw std::runtime_error(
+            "OpenAI API error " + std::to_string(status) +
+            ": " + errBody.substr(0, 200));
+    }
+
+    auto j = nlohmann::json::parse(res->body);
+    if (j.contains("choices") && !j["choices"].empty())
+        return j["choices"][0]["message"]["content"].get<std::string>();
 
     return res->body;
 }
@@ -136,14 +218,24 @@ std::string LLMDecisionEngine::callOllama(
     // Parse host:port from ollamaHost
     std::string host = config_.ollamaHost;
 
+    // Replace localhost with 127.0.0.1 to avoid IPv6 resolution issues on macOS
+    {
+        auto pos = host.find("://localhost");
+        if (pos != std::string::npos) {
+            host.replace(pos + 3, 9, "127.0.0.1");
+            spdlog::debug("Ollama: resolved localhost -> {}", host);
+        }
+    }
+
     httplib::Client cli(host);
-    cli.set_connection_timeout(config_.timeoutMs / 1000,
-                                (config_.timeoutMs % 1000) * 1000);
-    cli.set_read_timeout(30, 0);  // Ollama can be slow
+    cli.set_connection_timeout(10, 0);   // 10s — generous for localhost
+    cli.set_read_timeout(120, 0);        // 120s — model cold-start can be very slow
+    cli.set_write_timeout(10, 0);
 
     nlohmann::json body = {
         {"model",   config_.ollamaModel},
         {"stream",  false},
+        {"format",  "json"},  // Force JSON output mode
         {"system",  systemPrompt},
         {"prompt",  userMessage},
         {"options", {
@@ -152,12 +244,27 @@ std::string LLMDecisionEngine::callOllama(
         }}
     };
 
+    spdlog::debug("Ollama: POST {} /api/generate model={}", host, config_.ollamaModel);
     auto res = cli.Post("/api/generate", body.dump(), "application/json");
 
-    if (!res || res->status != 200) {
-        int status = res ? res->status : 0;
+    if (!res) {
+        auto err = res.error();
+        std::string errMsg;
+        switch (err) {
+            case httplib::Error::Connection:        errMsg = "connection failed"; break;
+            case httplib::Error::ConnectionTimeout:  errMsg = "connection timeout"; break;
+            case httplib::Error::Read:              errMsg = "read timeout"; break;
+            case httplib::Error::Write:             errMsg = "write error"; break;
+            default:                                errMsg = "error code " + std::to_string(static_cast<int>(err)); break;
+        }
+        throw std::runtime_error("Ollama request failed: " + errMsg +
+            " (host=" + host + ")");
+    }
+
+    if (res->status != 200) {
         throw std::runtime_error(
-            "Ollama API error " + std::to_string(status));
+            "Ollama API error " + std::to_string(res->status) +
+            ": " + res->body.substr(0, 200));
     }
 
     auto j = nlohmann::json::parse(res->body);
@@ -168,6 +275,11 @@ std::string LLMDecisionEngine::buildMixSystemPrompt() const {
     return R"(You are an expert live sound engineer AI assistant.
 You are given the current state of a live mixing console and recent history.
 Analyse the mix and suggest specific, safe adjustments.
+
+CRITICAL OUTPUT FORMAT:
+- You MUST respond with ONLY a valid JSON array. No explanations, no markdown, no text before or after.
+- If no changes are needed, respond with: [{"action":"no_action","reason":"mix sounds good"}]
+- NEVER respond with conversational text. ONLY output a JSON array starting with [ and ending with ].
 
 RULES:
 - Never change faders by more than 6dB in a single step
@@ -227,7 +339,8 @@ Respond with a JSON array of actions:
   }
 ]
 
-For set_eq: value=frequency_hz, value2=gain_db, value3=q_factor, band=1-6
+For set_eq: value=frequency_hz, value2=gain_db (NEGATIVE only — subtractive EQ, no boosting), value3=q_factor, band=1-4
+  IMPORTANT: Always cut, never boost EQ. Use negative gain values only (e.g. -3, -6).
 For set_comp: value=threshold_db, value2=ratio
 For set_hpf: value=frequency_hz
 For set_fader: value=0.0-1.0 normalized)";
@@ -242,16 +355,61 @@ std::vector<MixAction> LLMDecisionEngine::parseActions(
         // Try to find JSON array in response
         auto start = response.find('[');
         auto end   = response.rfind(']');
-        if (start == std::string::npos || end == std::string::npos) {
-            spdlog::warn("LLM response contains no JSON array");
-            return actions;
+
+        nlohmann::json j;
+
+        if (start != std::string::npos && end != std::string::npos && end > start) {
+            // Found an array — extract and parse it
+            std::string arrayStr = response.substr(start, end - start + 1);
+            try {
+                j = nlohmann::json::parse(arrayStr);
+            } catch (...) {
+                // Try to fix common issues: trailing commas
+                // Remove trailing comma before ]
+                std::string fixed = arrayStr;
+                auto lastComma = fixed.rfind(',');
+                auto lastBracket = fixed.rfind(']');
+                if (lastComma != std::string::npos && lastBracket != std::string::npos &&
+                    lastComma < lastBracket) {
+                    // Check if only whitespace between comma and bracket
+                    bool onlyWhitespace = true;
+                    for (size_t i = lastComma + 1; i < lastBracket; i++) {
+                        if (!isspace(fixed[i])) { onlyWhitespace = false; break; }
+                    }
+                    if (onlyWhitespace) {
+                        fixed.erase(lastComma, 1);
+                        j = nlohmann::json::parse(fixed);
+                    }
+                }
+            }
+        } else {
+            // No array found — try parsing as single object and wrap in array
+            try {
+                j = nlohmann::json::parse(response);
+                if (j.is_object()) {
+                    // Check if it has an "actions" key containing an array
+                    if (j.contains("actions") && j["actions"].is_array()) {
+                        j = j["actions"];
+                    } else if (j.contains("action")) {
+                        // Single action object — wrap in array
+                        j = nlohmann::json::array({j});
+                    } else {
+                        spdlog::warn("LLM response is not actionable: {}",
+                                     response.substr(0, 300));
+                        return actions;
+                    }
+                }
+            } catch (...) {
+                spdlog::warn("LLM response contains no JSON array: {}",
+                             response.substr(0, 300));
+                return actions;
+            }
         }
 
-        auto j = nlohmann::json::parse(
-            response.substr(start, end - start + 1));
-
-        for (auto& item : j) {
-            actions.push_back(MixAction::fromJson(item));
+        if (j.is_array()) {
+            for (auto& item : j) {
+                actions.push_back(MixAction::fromJson(item));
+            }
         }
     } catch (const std::exception& e) {
         spdlog::error("Failed to parse LLM actions: {}", e.what());

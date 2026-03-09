@@ -70,6 +70,7 @@ private:
     void llmLoop();          // slow: LLM decisions (5s)
     void executionLoop();    // approval queue consumer
     void uiLoop();           // terminal UI
+    void stdinLoop();        // headless: read JSON commands from stdin
 
     // Live channel reclassification on name change
     void onParameterUpdate(const ParameterUpdate& u);
@@ -121,5 +122,6 @@ private:
     std::thread llmThread_;
     std::thread execThread_;
     std::thread uiThread_;
+    std::thread stdinThread_;
     std::atomic<bool> running_{false};
 };

@@ -37,6 +37,10 @@ FetchContent_MakeAvailable(ftxui nlohmann_json httplib spdlog)
 # Find system packages
 find_package(Threads REQUIRED)
 
+# OpenSSL — required for HTTPS (Anthropic/OpenAI API calls)
+find_package(OpenSSL REQUIRED)
+add_compile_definitions(CPPHTTPLIB_OPENSSL_SUPPORT)
+
 # Required: PortAudio for audio capture (ASIO/CoreAudio/ALSA)
 find_package(PkgConfig)
 if(PkgConfig_FOUND)
@@ -70,6 +74,8 @@ target_link_libraries(mixagent PRIVATE
     nlohmann_json::nlohmann_json
     spdlog::spdlog
     Threads::Threads
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
 
 if(PORTAUDIO_LIBRARIES)
@@ -106,6 +112,8 @@ if(BUILD_TESTS)
         nlohmann_json::nlohmann_json
         spdlog::spdlog
         Threads::Threads
+        OpenSSL::SSL
+        OpenSSL::Crypto
     )
 
     if(PORTAUDIO_LIBRARIES)

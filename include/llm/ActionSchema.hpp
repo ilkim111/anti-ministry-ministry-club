@@ -39,6 +39,10 @@ struct MixAction {
 
     // Safety: maximum allowed change magnitude
     float       maxDelta = 0;    // 0 = use global default
+    bool        valueIsDb = false; // if true, fader value is always in dB
+
+    // Unique ID for approval tracking (set when queued)
+    std::string id;
 
     // Human-readable explanation
     std::string reason;

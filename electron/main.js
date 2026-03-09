@@ -404,6 +404,215 @@ ipcMain.handle('audio:testDevices', async () => {
   });
 });
 
+// ── OSC Direct Test ─────────────────────────────────────────
+
+function buildOscMessage(address, typeTag, values) {
+  // Pad string to 4-byte boundary (including null terminator)
+  function padStr(s) {
+    const buf = Buffer.from(s + '\0');
+    const pad = 4 - (buf.length % 4);
+    return pad < 4 ? Buffer.concat([buf, Buffer.alloc(pad)]) : buf;
+  }
+
+  const addrBuf = padStr(address);
+  const tagBuf = padStr(',' + typeTag);
+
+  const valueBufs = [];
+  for (let i = 0; i < typeTag.length; i++) {
+    const t = typeTag[i];
+    const v = values[i];
+    if (t === 'f') {
+      const b = Buffer.alloc(4);
+      b.writeFloatBE(v, 0);
+      valueBufs.push(b);
+    } else if (t === 'i') {
+      const b = Buffer.alloc(4);
+      b.writeInt32BE(v, 0);
+      valueBufs.push(b);
+    } else if (t === 's') {
+      valueBufs.push(padStr(v));
+    }
+  }
+
+  return Buffer.concat([addrBuf, tagBuf, ...valueBufs]);
+}
+
+function parseOscMessage(buf) {
+  let offset = 0;
+
+  function readStr() {
+    const end = buf.indexOf(0, offset);
+    const s = buf.toString('ascii', offset, end);
+    offset = end + 1;
+    offset += (4 - (offset % 4)) % 4; // align to 4 bytes
+    return s;
+  }
+
+  const address = readStr();
+  const typeTag = readStr();
+
+  const values = [];
+  for (let i = 1; i < typeTag.length; i++) { // skip leading ','
+    const t = typeTag[i];
+    if (t === 'f') {
+      values.push(buf.readFloatBE(offset));
+      offset += 4;
+    } else if (t === 'i') {
+      values.push(buf.readInt32BE(offset));
+      offset += 4;
+    } else if (t === 's') {
+      values.push(readStr());
+    }
+  }
+
+  return { address, typeTag: typeTag.slice(1), values };
+}
+
+function getOscAddress(channel, param, band, aux) {
+  const ch = String(channel).padStart(2, '0');
+  switch (param) {
+    case 'fader':       return `/ch/${ch}/mix/fader`;
+    case 'mute':        return `/ch/${ch}/mix/on`;
+    case 'unmute':      return `/ch/${ch}/mix/on`;
+    case 'pan':         return `/ch/${ch}/mix/pan`;
+    case 'eq_gain':     return `/ch/${ch}/eq/${band}/g`;
+    case 'eq_freq':     return `/ch/${ch}/eq/${band}/f`;
+    case 'eq_q':        return `/ch/${ch}/eq/${band}/q`;
+    case 'comp_thresh': return `/ch/${ch}/dyn/thr`;
+    case 'comp_ratio':  return `/ch/${ch}/dyn/ratio`;
+    case 'hpf':         return `/ch/${ch}/preamp/hpf`;
+    case 'send':        return `/ch/${ch}/mix/${String(parseInt(aux) + 1).padStart(2, '0')}/level`;
+    default:            return null;
+  }
+}
+
+function getOscConfig() {
+  // Read console config to get IP/port
+  try {
+    const configPath = path.join(resolveConfigDir(), 'show.json');
+    const raw = fs.readFileSync(configPath, 'utf-8');
+    const cfg = JSON.parse(raw);
+    return {
+      ip: cfg.console_ip || '192.168.1.100',
+      port: cfg.console_port || 10023,
+      type: cfg.console_type || 'x32'
+    };
+  } catch {
+    return { ip: '192.168.1.100', port: 10023, type: 'x32' };
+  }
+}
+
+ipcMain.handle('osc:send', async (_event, opts) => {
+  const dgram = require('dgram');
+  const { channel, param, value, band, aux, customAddr } = opts;
+  const consoleCfg = getOscConfig();
+
+  const address = customAddr || getOscAddress(channel, param, band, aux);
+  if (!address) return { ok: false, error: 'Unknown parameter type' };
+
+  let typeTag, values;
+
+  if (param === 'mute') {
+    // X32: mix/on=0 means muted
+    typeTag = 'i';
+    values = [0];
+  } else if (param === 'unmute') {
+    typeTag = 'i';
+    values = [1];
+  } else if (param === 'hpf') {
+    // HPF frequency is a normalized float on X32
+    typeTag = 'f';
+    values = [parseFloat(value)];
+  } else {
+    typeTag = 'f';
+    values = [parseFloat(value)];
+  }
+
+  const msg = buildOscMessage(address, typeTag, values);
+
+  return new Promise((resolve) => {
+    const socket = dgram.createSocket('udp4');
+    const timer = setTimeout(() => {
+      socket.close();
+      resolve({ ok: true, sent: true, address, values, note: 'Sent (no echo expected for SET)' });
+    }, 500);
+
+    socket.on('message', (buf) => {
+      clearTimeout(timer);
+      try {
+        const parsed = parseOscMessage(buf);
+        socket.close();
+        resolve({ ok: true, sent: true, address, values, echo: parsed });
+      } catch {
+        socket.close();
+        resolve({ ok: true, sent: true, address, values, note: 'Echo received but unparseable' });
+      }
+    });
+
+    socket.on('error', (err) => {
+      clearTimeout(timer);
+      socket.close();
+      resolve({ ok: false, error: err.message });
+    });
+
+    socket.send(msg, consoleCfg.port, consoleCfg.ip);
+    mainWindow?.webContents.send('osc:response', {
+      direction: 'sent',
+      address,
+      typeTag,
+      values,
+      target: `${consoleCfg.ip}:${consoleCfg.port}`
+    });
+  });
+});
+
+ipcMain.handle('osc:query', async (_event, opts) => {
+  const dgram = require('dgram');
+  const { channel, param, band, aux, customAddr } = opts;
+  const consoleCfg = getOscConfig();
+
+  const address = customAddr || getOscAddress(channel, param, band, aux);
+  if (!address) return { ok: false, error: 'Unknown parameter type' };
+
+  // X32 query: send the address with no arguments
+  const msg = buildOscMessage(address, '', []);
+
+  return new Promise((resolve) => {
+    const socket = dgram.createSocket('udp4');
+    const timer = setTimeout(() => {
+      socket.close();
+      resolve({ ok: false, error: 'No response from console (timeout)' });
+    }, 2000);
+
+    socket.on('message', (buf) => {
+      clearTimeout(timer);
+      try {
+        const parsed = parseOscMessage(buf);
+        socket.close();
+        mainWindow?.webContents.send('osc:response', {
+          direction: 'received',
+          address: parsed.address,
+          typeTag: parsed.typeTag,
+          values: parsed.values,
+          source: `${consoleCfg.ip}:${consoleCfg.port}`
+        });
+        resolve({ ok: true, address: parsed.address, typeTag: parsed.typeTag, values: parsed.values });
+      } catch (e) {
+        socket.close();
+        resolve({ ok: false, error: 'Failed to parse response: ' + e.message });
+      }
+    });
+
+    socket.on('error', (err) => {
+      clearTimeout(timer);
+      socket.close();
+      resolve({ ok: false, error: err.message });
+    });
+
+    socket.send(msg, consoleCfg.port, consoleCfg.ip);
+  });
+});
+
 // ── Demo mode ───────────────────────────────────────────────────────
 
 let demoTimers = [];

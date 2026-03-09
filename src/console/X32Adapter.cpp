@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
+#include <cmath>
 #include <algorithm>
 
 X32Adapter::X32Adapter() = default;
@@ -108,6 +109,7 @@ void X32Adapter::requestFullSync() {
         sendOscQuery(channelPath(ch, "/preamp/hpf"));
 
         // EQ
+        sendOscQuery(channelPath(ch, "/eq/on"));
         for (int b = 1; b <= 4; b++) {
             std::string prefix = "/eq/" + std::to_string(b);
             sendOscQuery(channelPath(ch, prefix + "/f"));
@@ -141,61 +143,79 @@ void X32Adapter::requestFullSync() {
 }
 
 void X32Adapter::setChannelParam(int ch, ChannelParam param, float value) {
+    // X32 OSC: ALL float parameters must be normalized [0.0, 1.0].
+    // Convert human-readable values (Hz, dB, Q, ratio) to normalized floats.
     switch (param) {
         case ChannelParam::Fader:
+            // Already normalized [0.0, 1.0] by ActionValidator::dbToFaderFloat
             sendOsc(channelPath(ch, "/mix/fader"), value);
             break;
         case ChannelParam::Pan:
+            // Already normalized [0.0, 1.0]
             sendOsc(channelPath(ch, "/mix/pan"), value);
             break;
         case ChannelParam::Gain:
             sendOsc(channelPath(ch, "/preamp/trim"), value);
             break;
-        case ChannelParam::HighPassFreq:
-            sendOsc(channelPath(ch, "/preamp/hpf"), value);
+        case ChannelParam::HighPassFreq: {
+            float norm = hpfFreqToNorm(value);
+            spdlog::debug("X32: ch{} HPF {:.0f}Hz -> norm {:.4f}", ch, value, norm);
+            sendOsc(channelPath(ch, "/preamp/hpf"), norm);
             break;
+        }
+        // EQ frequency — logf [20, 20000, 201]
         case ChannelParam::EqBand1Freq:
-            sendOsc(channelPath(ch, "/eq/1/f"), value);
-            break;
-        case ChannelParam::EqBand1Gain:
-            sendOsc(channelPath(ch, "/eq/1/g"), value);
-            break;
-        case ChannelParam::EqBand1Q:
-            sendOsc(channelPath(ch, "/eq/1/q"), value);
-            break;
         case ChannelParam::EqBand2Freq:
-            sendOsc(channelPath(ch, "/eq/2/f"), value);
-            break;
-        case ChannelParam::EqBand2Gain:
-            sendOsc(channelPath(ch, "/eq/2/g"), value);
-            break;
-        case ChannelParam::EqBand2Q:
-            sendOsc(channelPath(ch, "/eq/2/q"), value);
-            break;
         case ChannelParam::EqBand3Freq:
-            sendOsc(channelPath(ch, "/eq/3/f"), value);
+        case ChannelParam::EqBand4Freq: {
+            float norm = eqFreqToNorm(value);
+            int band = (param == ChannelParam::EqBand1Freq) ? 1 :
+                       (param == ChannelParam::EqBand2Freq) ? 2 :
+                       (param == ChannelParam::EqBand3Freq) ? 3 : 4;
+            spdlog::debug("X32: ch{} EQ band{} freq {:.0f}Hz -> norm {:.4f}", ch, band, value, norm);
+            sendOsc(channelPath(ch, "/eq/" + std::to_string(band) + "/f"), norm);
             break;
+        }
+        // EQ gain — linf [-15, 15, 0.250]
+        case ChannelParam::EqBand1Gain:
+        case ChannelParam::EqBand2Gain:
         case ChannelParam::EqBand3Gain:
-            sendOsc(channelPath(ch, "/eq/3/g"), value);
+        case ChannelParam::EqBand4Gain: {
+            float norm = eqGainToNorm(value);
+            int band = (param == ChannelParam::EqBand1Gain) ? 1 :
+                       (param == ChannelParam::EqBand2Gain) ? 2 :
+                       (param == ChannelParam::EqBand3Gain) ? 3 : 4;
+            spdlog::debug("X32: ch{} EQ band{} gain {:.1f}dB -> norm {:.4f}", ch, band, value, norm);
+            sendOsc(channelPath(ch, "/eq/" + std::to_string(band) + "/g"), norm);
             break;
+        }
+        // EQ Q — logf [10.0, 0.3, 72]
+        case ChannelParam::EqBand1Q:
+        case ChannelParam::EqBand2Q:
         case ChannelParam::EqBand3Q:
-            sendOsc(channelPath(ch, "/eq/3/q"), value);
+        case ChannelParam::EqBand4Q: {
+            float norm = eqQToNorm(value);
+            int band = (param == ChannelParam::EqBand1Q) ? 1 :
+                       (param == ChannelParam::EqBand2Q) ? 2 :
+                       (param == ChannelParam::EqBand3Q) ? 3 : 4;
+            spdlog::debug("X32: ch{} EQ band{} Q {:.2f} -> norm {:.4f}", ch, band, value, norm);
+            sendOsc(channelPath(ch, "/eq/" + std::to_string(band) + "/q"), norm);
             break;
-        case ChannelParam::EqBand4Freq:
-            sendOsc(channelPath(ch, "/eq/4/f"), value);
+        }
+        // Compressor threshold — linf [-60, 0, 0.500]
+        case ChannelParam::CompThreshold: {
+            float norm = compThreshToNorm(value);
+            spdlog::debug("X32: ch{} comp thresh {:.1f}dB -> norm {:.4f}", ch, value, norm);
+            sendOsc(channelPath(ch, "/dyn/thr"), norm);
             break;
-        case ChannelParam::EqBand4Gain:
-            sendOsc(channelPath(ch, "/eq/4/g"), value);
+        }
+        // Compressor ratio — enum [0..11], must be sent as int
+        case ChannelParam::CompRatio: {
+            int idx = compRatioToEnum(value);
+            spdlog::debug("X32: ch{} comp ratio {:.1f}:1 -> enum {}", ch, value, idx);
+            sendOsc(channelPath(ch, "/dyn/ratio"), idx);
             break;
-        case ChannelParam::EqBand4Q:
-            sendOsc(channelPath(ch, "/eq/4/q"), value);
-            break;
-        case ChannelParam::CompThreshold:
-            sendOsc(channelPath(ch, "/dyn/thr"), value);
-            break;
-        case ChannelParam::CompRatio:
-            sendOsc(channelPath(ch, "/dyn/ratio"), value);
-            break;
+        }
         case ChannelParam::CompAttack:
             sendOsc(channelPath(ch, "/dyn/attack"), value);
             break;
@@ -205,9 +225,13 @@ void X32Adapter::setChannelParam(int ch, ChannelParam param, float value) {
         case ChannelParam::CompMakeup:
             sendOsc(channelPath(ch, "/dyn/mgain"), value);
             break;
-        case ChannelParam::GateThreshold:
-            sendOsc(channelPath(ch, "/gate/thr"), value);
+        // Gate threshold — linf [-80, 0, 0.500]
+        case ChannelParam::GateThreshold: {
+            float norm = gateThreshToNorm(value);
+            spdlog::debug("X32: ch{} gate thresh {:.1f}dB -> norm {:.4f}", ch, value, norm);
+            sendOsc(channelPath(ch, "/gate/thr"), norm);
             break;
+        }
         case ChannelParam::GateRange:
             sendOsc(channelPath(ch, "/gate/range"), value);
             break;
@@ -221,8 +245,9 @@ void X32Adapter::setChannelParam(int ch, ChannelParam param, bool value) {
     int intVal = value ? 1 : 0;
     switch (param) {
         case ChannelParam::Mute:
-            // X32: mix/on is inverted — ON=1 means unmuted
-            sendOsc(channelPath(ch, "/mix/on"), value ? 1 : 0);
+            // X32: mix/on is inverted — ON=1 means unmuted, OFF=0 means muted
+            // Mute=true → send mix/on=0 (OFF), Mute=false → send mix/on=1 (ON)
+            sendOsc(channelPath(ch, "/mix/on"), value ? 0 : 1);
             break;
         case ChannelParam::EqOn:
             sendOsc(channelPath(ch, "/eq/on"), intVal);
@@ -464,40 +489,75 @@ void X32Adapter::handleParameterMessage(const std::string& address, const ParamV
         update.index  = std::stoi(address.substr(4, 2));
         std::string path = address.substr(6);
 
-        if (path == "/mix/fader")       { update.param = ChannelParam::Fader;   }
-        else if (path == "/mix/on")     { update.param = ChannelParam::Mute; /* inverted */ }
-        else if (path == "/mix/pan")    { update.param = ChannelParam::Pan;     }
+        if (path == "/mix/fader")       { update.param = ChannelParam::Fader; update.value = value; }
+        else if (path == "/mix/on")     { update.param = ChannelParam::Mute; update.value = value; }
+        else if (path == "/mix/pan")    { update.param = ChannelParam::Pan; update.value = value; }
         else if (path == "/config/name"){
             update.param = ChannelParam::Name;
+            update.value = value;
             if (std::holds_alternative<std::string>(value))
                 update.strValue = std::get<std::string>(value);
         }
-        else if (path == "/preamp/trim")  { update.param = ChannelParam::Gain; }
-        else if (path == "/preamp/hpf")   { update.param = ChannelParam::HighPassFreq; }
-        else if (path == "/preamp/hpon")  { update.param = ChannelParam::HighPassOn; }
-        else if (path == "/eq/1/f") { update.param = ChannelParam::EqBand1Freq; }
-        else if (path == "/eq/1/g") { update.param = ChannelParam::EqBand1Gain; }
-        else if (path == "/eq/1/q") { update.param = ChannelParam::EqBand1Q; }
-        else if (path == "/eq/2/f") { update.param = ChannelParam::EqBand2Freq; }
-        else if (path == "/eq/2/g") { update.param = ChannelParam::EqBand2Gain; }
-        else if (path == "/eq/2/q") { update.param = ChannelParam::EqBand2Q; }
-        else if (path == "/eq/3/f") { update.param = ChannelParam::EqBand3Freq; }
-        else if (path == "/eq/3/g") { update.param = ChannelParam::EqBand3Gain; }
-        else if (path == "/eq/3/q") { update.param = ChannelParam::EqBand3Q; }
-        else if (path == "/eq/4/f") { update.param = ChannelParam::EqBand4Freq; }
-        else if (path == "/eq/4/g") { update.param = ChannelParam::EqBand4Gain; }
-        else if (path == "/eq/4/q") { update.param = ChannelParam::EqBand4Q; }
-        else if (path == "/dyn/thr")     { update.param = ChannelParam::CompThreshold; }
-        else if (path == "/dyn/ratio")   { update.param = ChannelParam::CompRatio; }
-        else if (path == "/dyn/attack")  { update.param = ChannelParam::CompAttack; }
-        else if (path == "/dyn/release") { update.param = ChannelParam::CompRelease; }
-        else if (path == "/dyn/on")      { update.param = ChannelParam::CompOn; }
-        else if (path == "/gate/thr")    { update.param = ChannelParam::GateThreshold; }
-        else if (path == "/gate/range")  { update.param = ChannelParam::GateRange; }
-        else if (path == "/gate/on")     { update.param = ChannelParam::GateOn; }
+        else if (path == "/preamp/trim")  { update.param = ChannelParam::Gain; update.value = value; }
+        else if (path == "/preamp/hpon")  { update.param = ChannelParam::HighPassOn; update.value = value; }
+        // EQ params: X32 sends normalized [0,1], convert to human-readable
+        else if (path == "/eq/1/f" || path == "/eq/2/f" ||
+                 path == "/eq/3/f" || path == "/eq/4/f") {
+            if (path == "/eq/1/f")      update.param = ChannelParam::EqBand1Freq;
+            else if (path == "/eq/2/f") update.param = ChannelParam::EqBand2Freq;
+            else if (path == "/eq/3/f") update.param = ChannelParam::EqBand3Freq;
+            else                        update.param = ChannelParam::EqBand4Freq;
+            if (std::holds_alternative<float>(value))
+                update.value = normToEqFreq(std::get<float>(value));
+            else update.value = value;
+        }
+        else if (path == "/eq/1/g" || path == "/eq/2/g" ||
+                 path == "/eq/3/g" || path == "/eq/4/g") {
+            if (path == "/eq/1/g")      update.param = ChannelParam::EqBand1Gain;
+            else if (path == "/eq/2/g") update.param = ChannelParam::EqBand2Gain;
+            else if (path == "/eq/3/g") update.param = ChannelParam::EqBand3Gain;
+            else                        update.param = ChannelParam::EqBand4Gain;
+            if (std::holds_alternative<float>(value))
+                update.value = normToEqGain(std::get<float>(value));
+            else update.value = value;
+        }
+        else if (path == "/eq/1/q" || path == "/eq/2/q" ||
+                 path == "/eq/3/q" || path == "/eq/4/q") {
+            if (path == "/eq/1/q")      update.param = ChannelParam::EqBand1Q;
+            else if (path == "/eq/2/q") update.param = ChannelParam::EqBand2Q;
+            else if (path == "/eq/3/q") update.param = ChannelParam::EqBand3Q;
+            else                        update.param = ChannelParam::EqBand4Q;
+            if (std::holds_alternative<float>(value))
+                update.value = normToEqQ(std::get<float>(value));
+            else update.value = value;
+        }
+        // HPF: X32 sends normalized, convert to Hz
+        else if (path == "/preamp/hpf") {
+            update.param = ChannelParam::HighPassFreq;
+            if (std::holds_alternative<float>(value))
+                update.value = normToHpfFreq(std::get<float>(value));
+            else update.value = value;
+        }
+        // Compressor/gate thresholds: X32 sends normalized, convert to dB
+        else if (path == "/dyn/thr") {
+            update.param = ChannelParam::CompThreshold;
+            if (std::holds_alternative<float>(value))
+                update.value = std::get<float>(value) * 60.0f - 60.0f;
+            else update.value = value;
+        }
+        else if (path == "/dyn/ratio")   { update.param = ChannelParam::CompRatio; update.value = value; }
+        else if (path == "/dyn/attack")  { update.param = ChannelParam::CompAttack; update.value = value; }
+        else if (path == "/dyn/release") { update.param = ChannelParam::CompRelease; update.value = value; }
+        else if (path == "/dyn/on")      { update.param = ChannelParam::CompOn; update.value = value; }
+        else if (path == "/gate/thr") {
+            update.param = ChannelParam::GateThreshold;
+            if (std::holds_alternative<float>(value))
+                update.value = std::get<float>(value) * 80.0f - 80.0f;
+            else update.value = value;
+        }
+        else if (path == "/gate/range")  { update.param = ChannelParam::GateRange; update.value = value; }
+        else if (path == "/gate/on")     { update.param = ChannelParam::GateOn; update.value = value; }
         else return;
-
-        update.value = value;
     } else if (address.substr(0, 5) == "/bus/") {
         update.target = ParameterUpdate::Target::Bus;
         update.index  = std::stoi(address.substr(5, 2));
@@ -522,8 +582,9 @@ void X32Adapter::handleParameterMessage(const std::string& address, const ParamV
 }
 
 void X32Adapter::handleMeterMessage(const uint8_t* data, size_t len) {
-    // X32 meter blob format: /meters followed by blob of float32 values
-    // First 32 floats are input channel meters (0.0–1.0 normalized)
+    // X32 meter blob format: OSC address + type tag ",b\0\0" + blob
+    // Blob: 4-byte big-endian size, then payload
+    // Payload: 4-byte LE int32 count, then count x int16 LE meter values
     size_t offset = 0;
     // Skip address
     while (offset < len && data[offset] != 0) offset++;
@@ -532,27 +593,33 @@ void X32Adapter::handleMeterMessage(const uint8_t* data, size_t len) {
     // Skip type tag
     if (offset >= len || data[offset] != ',') return;
     offset += 4;
-    // Skip blob size
+    // Read blob size (big-endian per OSC spec)
     if (offset + 4 > len) return;
     uint32_t blobSize;
     memcpy(&blobSize, data + offset, 4);
     blobSize = ntohl(blobSize);
     offset += 4;
 
-    int channels = std::min((int)(blobSize / 4), 32);
+    if (offset + blobSize > len || blobSize < 4) return;
+
+    // First 4 bytes of blob payload = number of float values (little-endian int32)
+    uint32_t numValues;
+    memcpy(&numValues, data + offset, 4);
+    offset += 4;
+
+    // X32 meter blob: native little-endian float32 values in range [0.0, 1.0]
+    // (headroom allows up to ~8.0 for +18 dBFS)
+    // /meters/0 layout: 32 inputs + 8 aux returns + 8 st fx returns + 16 bus masters + 6 matrixes = 70
+    int channels = std::min((int)numValues, 32);
     for (int ch = 0; ch < channels && offset + 4 <= len; ch++) {
-        uint32_t bits;
-        memcpy(&bits, data + offset, 4);
-        bits = ntohl(bits);
         float level;
-        memcpy(&level, &bits, 4);
+        memcpy(&level, data + offset, 4);  // native LE float, no byte swap
         offset += 4;
 
-        // Convert 0.0–1.0 to dBFS (X32 uses roughly log scale)
         float dbfs = (level > 0.0001f) ? 20.0f * log10f(level) : -96.0f;
 
         if (onMeterUpdate)
-            onMeterUpdate(ch + 1, dbfs, dbfs);  // RMS and peak approximation
+            onMeterUpdate(ch + 1, dbfs, dbfs);
     }
 }
 
@@ -561,9 +628,88 @@ void X32Adapter::sendKeepalive() {
 }
 
 void X32Adapter::renewMeterSubscription() {
-    // X32: /meters with int arg 0 subscribes to input meters for ~10s
-    sendOsc("/meters", 0);
+    // X32: /meters with string arg "/meters/0" subscribes to METERS page for ~10s
+    // /meters/0 = METERS page (70 floats: 32 in + 8 aux ret + 8 fx ret + 16 bus + 6 mtx)
+    // /meters/1 = channel page (96: 32 in + 32 gate + 32 dyn gain reduction)
+    // /meters/2 = mix bus page (49: 16 bus + 6 mtx + 2 main LR + 1 mono + dyn GR)
+    sendOsc("/meters", std::string("/meters/0"));
     lastMeterRenew_ = std::chrono::steady_clock::now();
+}
+
+// ── X32 Parameter Normalization ──────────────────────────────────────────
+// X32 OSC protocol: ALL float params are normalized [0.0, 1.0].
+// See "Type rules" in the X32 OSC Protocol doc, page 10-13.
+
+// EQ frequency: logf [20, 20000, 201] — log scale 20Hz to 20kHz
+float X32Adapter::eqFreqToNorm(float hz) {
+    hz = std::clamp(hz, 20.0f, 20000.0f);
+    return std::clamp(std::log10(hz / 20.0f) / std::log10(1000.0f), 0.0f, 1.0f);
+}
+
+float X32Adapter::normToEqFreq(float norm) {
+    norm = std::clamp(norm, 0.0f, 1.0f);
+    return 20.0f * std::pow(10.0f, norm * std::log10(1000.0f));
+}
+
+// EQ gain: linf [-15, 15, 0.250] — linear -15dB to +15dB
+float X32Adapter::eqGainToNorm(float db) {
+    db = std::clamp(db, -15.0f, 15.0f);
+    return (db + 15.0f) / 30.0f;
+}
+
+float X32Adapter::normToEqGain(float norm) {
+    norm = std::clamp(norm, 0.0f, 1.0f);
+    return norm * 30.0f - 15.0f;
+}
+
+// EQ Q: logf [10.0, 0.3, 72] — log scale from 10.0 (tight) to 0.3 (wide)
+float X32Adapter::eqQToNorm(float q) {
+    q = std::clamp(q, 0.3f, 10.0f);
+    // 10.0 → 0.0, 0.3 → 1.0 (log scale, inverted)
+    return std::clamp(std::log10(q / 10.0f) / std::log10(0.03f), 0.0f, 1.0f);
+}
+
+float X32Adapter::normToEqQ(float norm) {
+    norm = std::clamp(norm, 0.0f, 1.0f);
+    return 10.0f * std::pow(10.0f, norm * std::log10(0.03f));
+}
+
+// HPF frequency: logf [20, 400, 101] — log scale 20Hz to 400Hz
+float X32Adapter::hpfFreqToNorm(float hz) {
+    hz = std::clamp(hz, 20.0f, 400.0f);
+    return std::clamp(std::log10(hz / 20.0f) / std::log10(20.0f), 0.0f, 1.0f);
+}
+
+float X32Adapter::normToHpfFreq(float norm) {
+    norm = std::clamp(norm, 0.0f, 1.0f);
+    return 20.0f * std::pow(10.0f, norm * std::log10(20.0f));
+}
+
+// Compressor threshold: linf [-60, 0, 0.500] — linear -60dB to 0dB
+float X32Adapter::compThreshToNorm(float db) {
+    db = std::clamp(db, -60.0f, 0.0f);
+    return (db + 60.0f) / 60.0f;
+}
+
+// Compressor ratio: enum [0..11] → {1.1, 1.3, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.0, 10, 20, 100}
+int X32Adapter::compRatioToEnum(float ratio) {
+    static const float ratios[] = {1.1f, 1.3f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f, 5.0f, 7.0f, 10.0f, 20.0f, 100.0f};
+    int best = 0;
+    float bestDiff = std::abs(ratio - ratios[0]);
+    for (int i = 1; i < 12; i++) {
+        float diff = std::abs(ratio - ratios[i]);
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            best = i;
+        }
+    }
+    return best;
+}
+
+// Gate threshold: linf [-80, 0, 0.500] — linear -80dB to 0dB
+float X32Adapter::gateThreshToNorm(float db) {
+    db = std::clamp(db, -80.0f, 0.0f);
+    return (db + 80.0f) / 80.0f;
 }
 
 std::vector<uint8_t> X32Adapter::buildOscMessage(

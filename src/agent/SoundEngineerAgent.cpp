@@ -2,6 +2,8 @@
 #include "audio/NullAudioCapture.hpp"
 #include <spdlog/spdlog.h>
 #include <iostream>
+#include <poll.h>
+#include <unistd.h>
 
 void SoundEngineerAgent::emitJson(const nlohmann::json& msg) {
     if (!config_.headless) return;
@@ -161,6 +163,8 @@ bool SoundEngineerAgent::start() {
 
     if (!config_.headless) {
         uiThread_ = std::thread(&SoundEngineerAgent::uiLoop, this);
+    } else {
+        stdinThread_ = std::thread(&SoundEngineerAgent::stdinLoop, this);
     }
 
     spdlog::info("Agent running — DSP@{}ms LLM@{}ms Audio:{}",
@@ -193,6 +197,7 @@ void SoundEngineerAgent::stop() {
     if (llmThread_.joinable())  llmThread_.join();
     if (execThread_.joinable()) execThread_.join();
     if (uiThread_.joinable())   uiThread_.join();
+    if (stdinThread_.joinable()) stdinThread_.join();
 
     // Persist learned preferences for next session
     if (!config_.preferencesFile.empty() && preferences_.isDirty()) {
@@ -404,6 +409,13 @@ void SoundEngineerAgent::llmLoop() {
                     continue;
                 }
 
+                // Generate action ID for tracking
+                {
+                    auto now = std::chrono::steady_clock::now().time_since_epoch();
+                    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+                    action.id = "action-" + std::to_string(ms) + "-" + std::to_string(action.channel);
+                }
+
                 // Submit to approval queue
                 bool autoApproved = approvalQueue_.submit(action);
 
@@ -422,17 +434,12 @@ void SoundEngineerAgent::llmLoop() {
                     }
                 } else {
                     approvalUI_.addLog("Queued: " + action.describe());
-                    {
-                        auto now = std::chrono::steady_clock::now().time_since_epoch();
-                        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
-                        std::string actionId = "action-" + std::to_string(ms) + "-" + std::to_string(action.channel);
-                        emitJson({{"type", "approval_request"},
-                                  {"id", actionId},
-                                  {"action", action.describe()},
-                                  {"description", action.describe()},
-                                  {"reason", action.reason},
-                                  {"urgency", static_cast<int>(action.urgency)}});
-                    }
+                    emitJson({{"type", "approval_request"},
+                              {"id", action.id},
+                              {"action", action.describe()},
+                              {"description", action.describe()},
+                              {"reason", action.reason},
+                              {"urgency", static_cast<int>(action.urgency)}});
                 }
             }
 
@@ -496,6 +503,90 @@ void SoundEngineerAgent::uiLoop() {
         spdlog::info("UI exited — stopping agent");
         running_ = false;
     }
+}
+
+// ── Stdin Command Loop (headless mode) ──────────────────────────────────
+
+void SoundEngineerAgent::stdinLoop() {
+    spdlog::debug("Stdin command thread started");
+
+    // Use poll() to avoid blocking forever on stdin
+    struct pollfd pfd;
+    pfd.fd = STDIN_FILENO;
+    pfd.events = POLLIN;
+
+    std::string line;
+    while (running_) {
+        int ret = poll(&pfd, 1, 200);  // 200ms timeout
+        if (ret <= 0) continue;        // timeout or error
+        if (!std::getline(std::cin, line)) break;  // EOF
+        if (line.empty()) continue;
+        try {
+            auto cmd = nlohmann::json::parse(line);
+            std::string command = cmd.value("command", "");
+
+            if (command == "approve") {
+                std::string id = cmd.value("id", "");
+                // Find pending action with matching ID and approve it
+                auto pending = approvalQueue_.pending();
+                for (size_t i = 0; i < pending.size(); i++) {
+                    if (pending[i].action.id == id) {
+                        approvalQueue_.approve(i);
+                        spdlog::info("Approved action: {}", id);
+                        emitJson({{"type", "approval_response"},
+                                  {"id", id}, {"status", "approved"}});
+                        break;
+                    }
+                }
+            } else if (command == "reject") {
+                std::string id = cmd.value("id", "");
+                auto pending = approvalQueue_.pending();
+                for (size_t i = 0; i < pending.size(); i++) {
+                    if (pending[i].action.id == id) {
+                        approvalQueue_.reject(i);
+                        spdlog::info("Rejected action: {}", id);
+                        emitJson({{"type", "approval_response"},
+                                  {"id", id}, {"status", "rejected"}});
+                        break;
+                    }
+                }
+            } else if (command == "approve_all") {
+                approvalQueue_.approveAll();
+                spdlog::info("Approved all pending actions");
+                emitJson({{"type", "approval_response"},
+                          {"status", "all_approved"}});
+            } else if (command == "reject_all") {
+                approvalQueue_.rejectAll();
+                spdlog::info("Rejected all pending actions");
+                emitJson({{"type", "approval_response"},
+                          {"status", "all_rejected"}});
+            } else if (command == "set_approval_mode") {
+                std::string mode = cmd.value("mode", "");
+                if (mode == "approve_all")
+                    approvalQueue_.setMode(ApprovalQueue::Mode::ApproveAll);
+                else if (mode == "auto_all")
+                    approvalQueue_.setMode(ApprovalQueue::Mode::AutoAll);
+                else if (mode == "auto_urgent")
+                    approvalQueue_.setMode(ApprovalQueue::Mode::AutoUrgent);
+                else if (mode == "deny_all")
+                    approvalQueue_.setMode(ApprovalQueue::Mode::DenyAll);
+                spdlog::info("Approval mode set to: {}", mode);
+                emitJson({{"type", "config_update"},
+                          {"key", "approval_mode"}, {"value", mode}});
+            } else if (command == "chat") {
+                std::string message = cmd.value("message", "");
+                if (!message.empty()) {
+                    spdlog::info("Chat from UI: {}", message);
+                    onChatMessage(message);
+                }
+            } else {
+                spdlog::warn("Unknown stdin command: {}", command);
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("Failed to parse stdin command: {}", e.what());
+        }
+    }
+    spdlog::debug("Stdin command thread stopped");
 }
 
 // ── Live reclassification ────────────────────────────────────────────────
@@ -564,54 +655,106 @@ Respond with JSON:
   "actions": [
     {
       "action": "set_fader|set_eq|set_comp|set_hpf|set_send|mute|unmute|no_action|observation",
-      "channel": 1, "role": "Kick", "value": 0.75,
+      "channel": 1, "role": "Kick", "value": -20,
       "value2": 0.0, "value3": 1.0, "band": 1, "aux": 0,
       "urgency": "normal", "reason": "explanation"
     }
   ]
-})";
+}
 
-            auto response = llm_.callRaw(systemPrompt, chatPrompt.dump());
+For set_fader: use dB values (e.g. -20 for -20dB, 0 for unity, -10 for -10dB).
+  The system auto-converts dB to the console's normalized float format.
+  dB reference: -inf=silence, -20dB=quiet, -10dB=moderate, 0dB=unity, +10dB=max.
+  Do NOT use normalized 0.0-1.0 float values — always use dB.
+For set_eq: value=frequency_hz, value2=gain_db (MUST be negative — subtractive EQ only, no boosting), value3=q_factor, band=1-4
+  IMPORTANT: Always cut, never boost. Use negative gain values only (e.g. -3, -6). If something needs more presence, cut competing frequencies on other channels instead.
+For set_comp: value=threshold_db, value2=ratio
+For set_hpf: value=frequency_hz)";
+
+            auto response = llm_.callRaw(systemPrompt, chatPrompt.dump(), 4096);
+
+            // Strip markdown code fences if present (LLMs often wrap JSON in ```json ... ```)
+            {
+                auto start = response.find("```");
+                if (start != std::string::npos) {
+                    // Find end of first line (skip ```json or ```JSON)
+                    auto contentStart = response.find('\n', start);
+                    if (contentStart != std::string::npos) contentStart++;
+                    auto end = response.rfind("```");
+                    if (end != std::string::npos && end > start && contentStart != std::string::npos) {
+                        response = response.substr(contentStart, end - contentStart);
+                        spdlog::debug("Stripped markdown fences from LLM response");
+                    }
+                }
+            }
 
             try {
                 auto j = nlohmann::json::parse(response);
 
                 std::string reply = j.value("reply", "");
-                if (!reply.empty())
+                if (!reply.empty()) {
                     approvalUI_.addChatResponse(reply);
+                    emitJson({{"type", "llm_response"},
+                              {"message", reply}});
+                }
 
                 if (j.contains("actions") && j["actions"].is_array()) {
+                    spdlog::info("Chat produced {} actions",
+                                 j["actions"].size());
                     for (auto& item : j["actions"]) {
                         auto action = MixAction::fromJson(item);
+                        // Chat prompt tells LLM to use dB for faders
+                        if (action.type == ActionType::SetFader)
+                            action.valueIsDb = true;
 
                         if (action.type == ActionType::NoAction ||
                             action.type == ActionType::Observation) {
-                            if (!action.reason.empty())
+                            if (!action.reason.empty()) {
                                 approvalUI_.addLog("LLM: " + action.reason);
+                                emitJson({{"type", "llm_response"},
+                                          {"message", action.reason}});
+                            }
                             continue;
                         }
 
-                        bool autoApproved = approvalQueue_.submit(action);
-                        if (autoApproved) {
-                            auto vr = validator_.validate(action, model_);
-                            if (vr.valid) {
-                                auto er = executor_.execute(vr.clamped);
-                                if (er.success) {
-                                    memory_.recordAction(vr.clamped,
-                                                         mixContext);
-                                    approvalUI_.addLog(
-                                        "Chat: " + vr.clamped.describe());
-                                }
+                        // Chat commands are explicit engineer requests —
+                        // use relaxed limits (no delta clamping)
+                        ActionValidator::SafetyLimits chatLimits;
+                        chatLimits.maxFaderDeltaNorm = 1.0f;  // allow full range
+                        chatLimits.maxEqBoostDB = 0.0f;       // subtractive EQ only
+                        ActionValidator chatValidator(chatLimits);
+                        auto vr = chatValidator.validate(action, model_);
+                        if (vr.valid) {
+                            auto er = executor_.execute(vr.clamped);
+                            if (er.success) {
+                                memory_.recordAction(vr.clamped, mixContext);
+                                std::string desc = "Chat: " + vr.clamped.describe();
+                                approvalUI_.addLog(desc);
+                                emitJson({{"type", "action_executed"},
+                                          {"action", desc}});
+                                spdlog::info("{}", desc);
+                            } else {
+                                approvalUI_.addLog(
+                                    "Failed: " + er.error);
+                                spdlog::warn("Chat action failed: {}", er.error);
                             }
                         } else {
                             approvalUI_.addLog(
-                                "Queued: " + action.describe());
+                                "Invalid: " + vr.warning);
+                            spdlog::warn("Chat action invalid: {}", vr.warning);
                         }
                     }
+                } else {
+                    spdlog::warn("Chat LLM response has no actions array");
                 }
-            } catch (const std::exception&) {
+            } catch (const std::exception& parseErr) {
                 // If JSON parse fails, treat whole response as plain text reply
-                approvalUI_.addChatResponse(response.substr(0, 200));
+                spdlog::warn("Chat response not valid JSON: {}",
+                             parseErr.what());
+                std::string text = response.substr(0, 500);
+                approvalUI_.addChatResponse(text);
+                emitJson({{"type", "llm_response"},
+                          {"message", text}});
             }
 
         } catch (const std::exception& e) {

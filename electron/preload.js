@@ -65,6 +65,13 @@ contextBridge.exposeInMainWorld('mixagent', {
     onStopped: (cb)             => ipcRenderer.on('demo:stopped', () => cb()),
   },
 
+  // OSC direct test
+  oscTest: {
+    send: (opts)                  => ipcRenderer.invoke('osc:send', opts),
+    query: (opts)                 => ipcRenderer.invoke('osc:query', opts),
+    onResponse: (cb)              => ipcRenderer.on('osc:response', (_e, data) => cb(data)),
+  },
+
   // Auto-updater
   updater: {
     check: ()                   => ipcRenderer.invoke('updater:check'),

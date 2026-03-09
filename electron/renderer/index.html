@@ -18,6 +18,7 @@
       <button class="tab" data-panel="meters">Meters</button>
       <button class="tab" data-panel="approval">Approval Queue</button>
       <button class="tab" data-panel="chat">Chat</button>
+      <button class="tab" data-panel="osctest">OSC Test</button>
       <button class="tab" data-panel="logs">Logs</button>
     </nav>
     <div class="topbar-right">
@@ -102,6 +103,22 @@
       <!-- LLM -->
       <fieldset>
         <legend>LLM Settings</legend>
+        <label>Anthropic Model
+          <select id="cfg-anthropic_model">
+            <option value="claude-haiku-4-5-20251001">Claude Haiku 3.5 ($0.80/M in, $4/M out)</option>
+            <option value="claude-sonnet-4-20250514">Claude Sonnet 4 ($3/M in, $15/M out)</option>
+            <option value="claude-opus-4-20250514">Claude Opus 4 ($15/M in, $75/M out)</option>
+          </select>
+        </label>
+        <label>OpenAI Model
+          <select id="cfg-openai_model">
+            <option value="gpt-4o-mini">GPT-4o Mini ($0.15/M in, $0.60/M out)</option>
+            <option value="gpt-4o">GPT-4o ($2.50/M in, $10/M out)</option>
+            <option value="gpt-4.1">GPT-4.1 ($2/M in, $8/M out)</option>
+            <option value="gpt-4.1-mini">GPT-4.1 Mini ($0.40/M in, $1.60/M out)</option>
+            <option value="gpt-4.1-nano">GPT-4.1 Nano ($0.10/M in, $0.40/M out)</option>
+          </select>
+        </label>
         <label>Temperature <input type="number" id="cfg-llm_temperature" min="0" max="1" step="0.05"></label>
         <label>Max Tokens <input type="number" id="cfg-llm_max_tokens" min="256" step="256"></label>
       </fieldset>
@@ -180,7 +197,7 @@
         <legend>API Keys &amp; Environment</legend>
         <div class="local-model-grid">
           <label>Anthropic API Key <input type="password" id="env-ANTHROPIC_API_KEY" placeholder="sk-ant-... (optional for local-only)"></label>
-          <label>Cloud Model <input type="text" id="env-MIXAGENT_MODEL" placeholder="claude-sonnet-4-20250514"></label>
+          <label>OpenAI API Key <input type="password" id="env-OPENAI_API_KEY" placeholder="sk-... (optional)"></label>
         </div>
         <div class="local-model-grid">
           <label>Log Level
@@ -269,6 +286,93 @@
       <input type="text" id="chat-input" placeholder="Type mix instructions..." autocomplete="off">
       <button type="submit" class="btn btn-primary">Send</button>
     </form>
+  </section>
+
+  <!-- ── OSC Test Panel ────────────────────────────────────────── -->
+  <section id="panel-osctest" class="panel">
+    <div class="panel-header">
+      <h2>OSC Test</h2>
+      <span class="hint">Send raw OSC commands directly to the console — no LLM in the loop</span>
+    </div>
+
+    <div class="config-grid">
+      <!-- Channel & Parameter Selection -->
+      <fieldset>
+        <legend>Target</legend>
+        <label>Channel
+          <input type="number" id="osc-channel" min="1" max="32" value="1">
+        </label>
+        <label>Parameter
+          <select id="osc-param">
+            <option value="fader">Fader (level)</option>
+            <option value="mute">Mute</option>
+            <option value="unmute">Unmute</option>
+            <option value="pan">Pan</option>
+            <option value="eq_gain">EQ Band Gain</option>
+            <option value="eq_freq">EQ Band Frequency</option>
+            <option value="eq_q">EQ Band Q</option>
+            <option value="comp_thresh">Compressor Threshold</option>
+            <option value="comp_ratio">Compressor Ratio</option>
+            <option value="hpf">High-Pass Filter</option>
+            <option value="send">Send Level</option>
+            <option value="custom">Custom OSC Address</option>
+          </select>
+        </label>
+        <label id="osc-band-label">EQ Band (1-4)
+          <input type="number" id="osc-band" min="1" max="4" value="1">
+        </label>
+        <label id="osc-aux-label">Aux/Bus (1-16)
+          <input type="number" id="osc-aux" min="1" max="16" value="1">
+        </label>
+        <label id="osc-custom-label" style="display:none;">OSC Address
+          <input type="text" id="osc-custom-addr" placeholder="/ch/01/mix/fader">
+        </label>
+      </fieldset>
+
+      <!-- Value & Actions -->
+      <fieldset>
+        <legend>Value</legend>
+        <label id="osc-value-label">Value (0.0 - 1.0)
+          <input type="text" id="osc-value" placeholder="0.75">
+        </label>
+        <label id="osc-db-label" style="display:none;">dB Value
+          <input type="text" id="osc-db-value" placeholder="-10.0">
+        </label>
+        <div id="osc-value-hint" class="model-info" style="margin-bottom:0.5rem;"></div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <button id="btn-osc-send" class="btn btn-primary">Send</button>
+          <button id="btn-osc-query" class="btn btn-secondary">Query Current</button>
+        </div>
+        <label class="checkbox-label" style="margin-top:0.5rem;">
+          <input type="checkbox" id="osc-show-db"> Show dB input for fader
+        </label>
+      </fieldset>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="config-grid" style="margin-top:1rem;">
+      <fieldset class="full-width">
+        <legend>Quick Actions</legend>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <button class="btn btn-sm osc-quick" data-action="mute">Mute Ch</button>
+          <button class="btn btn-sm osc-quick" data-action="unmute">Unmute Ch</button>
+          <button class="btn btn-sm osc-quick" data-action="fader-unity">Fader to 0dB</button>
+          <button class="btn btn-sm osc-quick" data-action="fader-off">Fader to -inf</button>
+          <button class="btn btn-sm osc-quick" data-action="fader-minus10">Fader to -10dB</button>
+          <button class="btn btn-sm osc-quick" data-action="hpf-80">HPF 80Hz</button>
+          <button class="btn btn-sm osc-quick" data-action="hpf-120">HPF 120Hz</button>
+          <button class="btn btn-sm osc-quick" data-action="pan-center">Pan Center</button>
+          <button class="btn btn-sm osc-quick" data-action="query-all">Query All Ch Params</button>
+        </div>
+      </fieldset>
+    </div>
+
+    <!-- Response Log -->
+    <div class="panel-header" style="margin-top:1rem;">
+      <h3>OSC Response Log</h3>
+      <button id="btn-osc-clear" class="btn btn-sm">Clear</button>
+    </div>
+    <pre id="osc-log" class="log-output" style="max-height:300px;"></pre>
   </section>
 
   <!-- ── Logs Panel ──────────────────────────────────────────── -->

@@ -158,6 +158,9 @@ private:
     }
 
     void expireOldLocked() {
+        // In ApproveAll mode, never auto-approve — wait for manual approval
+        if (mode_ == Mode::ApproveAll) return;
+
         auto now = std::chrono::steady_clock::now();
         auto it = pending_.begin();
         while (it != pending_.end()) {

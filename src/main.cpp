@@ -132,26 +132,33 @@ int main(int argc, char* argv[]) {
     LLMConfig llmConfig;
     llmConfig.anthropicApiKey = getEnv("ANTHROPIC_API_KEY");
     llmConfig.anthropicModel  = getEnv("MIXAGENT_MODEL",
-                                        "claude-sonnet-4-20250514");
+                                        config.value("anthropic_model", "claude-haiku-4-5-20251001"));
+    llmConfig.openaiApiKey    = getEnv("OPENAI_API_KEY");
+    llmConfig.openaiModel     = getEnv("OPENAI_MODEL",
+                                        config.value("openai_model", "gpt-4o"));
     llmConfig.ollamaHost      = getEnv("OLLAMA_HOST",
                                         "http://localhost:11434");
     llmConfig.ollamaModel     = getEnv("MIXAGENT_FALLBACK_MODEL",
-                                        "llama3:8b");
+                                        config.value("ollama_model", "llama3:8b"));
     llmConfig.useFallback     = !llmConfig.ollamaHost.empty();
     llmConfig.ollamaPrimary   = config.value("ollama_primary", false);
     llmConfig.temperature     = config.value("llm_temperature", 0.3f);
     llmConfig.maxTokens       = config.value("llm_max_tokens", 1024);
 
-    // Auto-detect: if no API key, switch to Ollama-primary
-    if (llmConfig.anthropicApiKey.empty()) {
+    // Auto-detect: if no cloud API keys, switch to Ollama-primary
+    if (llmConfig.anthropicApiKey.empty() && llmConfig.openaiApiKey.empty()) {
         llmConfig.ollamaPrimary = true;
-        spdlog::info("No ANTHROPIC_API_KEY set — using Ollama as primary LLM");
+        spdlog::info("No ANTHROPIC_API_KEY or OPENAI_API_KEY set — using Ollama as primary LLM");
     }
 
     if (llmConfig.ollamaPrimary) {
         spdlog::info("LLM mode: Ollama-primary ({})", llmConfig.ollamaModel);
-    } else {
+    } else if (!llmConfig.anthropicApiKey.empty()) {
         spdlog::info("LLM mode: Anthropic-primary ({})", llmConfig.anthropicModel);
+        if (!llmConfig.openaiApiKey.empty())
+            spdlog::info("  OpenAI fallback available ({})", llmConfig.openaiModel);
+    } else {
+        spdlog::info("LLM mode: OpenAI-primary ({})", llmConfig.openaiModel);
     }
 
     // Agent config
@@ -166,10 +173,15 @@ int main(int argc, char* argv[]) {
     // Handle audio_device_id as int or string (UI may save as string)
     if (config.contains("audio_device_id")) {
         auto& val = config["audio_device_id"];
-        if (val.is_number())
+        if (val.is_number()) {
             agentConfig.audioDeviceId = val.get<int>();
-        else if (val.is_string())
-            agentConfig.audioDeviceId = std::stoi(val.get<std::string>());
+        } else if (val.is_string()) {
+            auto s = val.get<std::string>();
+            if (!s.empty()) {
+                try { agentConfig.audioDeviceId = std::stoi(s); }
+                catch (...) { spdlog::warn("Invalid audio_device_id '{}', using default", s); }
+            }
+        }
     }
     agentConfig.audioDeviceName  = config.value("audio_device_name", "");
     agentConfig.audioSampleRate  = config.value("audio_sample_rate", 48000.0);

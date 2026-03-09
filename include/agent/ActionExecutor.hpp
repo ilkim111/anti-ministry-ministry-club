@@ -69,7 +69,7 @@ private:
             return {true, target, ""};
         }
 
-        // Ramp over ~200ms in 10 steps
+        // Ramp monotonically over ~200ms in 10 steps
         int steps = 10;
         float stepSize = delta / steps;
         float val = current;

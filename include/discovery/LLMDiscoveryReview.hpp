@@ -17,7 +17,7 @@ public:
     std::vector<ChannelProfile> review(std::vector<ChannelProfile> profiles) {
         auto prompt = buildDiscoveryPrompt(profiles);
         auto response = llm_.callRaw(discoverySystemPrompt(),
-                                      prompt.dump());
+                                      prompt.dump(), 4096);
         return parseReviewResponse(response, std::move(profiles));
     }
 

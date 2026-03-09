@@ -8,7 +8,9 @@
 
 struct LLMConfig {
     std::string anthropicApiKey;
-    std::string anthropicModel  = "claude-sonnet-4-20250514";
+    std::string anthropicModel  = "claude-haiku-4-5-20251001";
+    std::string openaiApiKey;
+    std::string openaiModel     = "gpt-4o";
     std::string ollamaHost      = "http://localhost:11434";
     std::string ollamaModel     = "llama3:8b";
     bool        useFallback     = true;   // fall back to Ollama if Anthropic fails
@@ -29,8 +31,10 @@ public:
         const nlohmann::json& sessionContext);
 
     // Raw call for discovery review and other non-standard uses
+    // maxTokensOverride: if > 0, overrides the configured maxTokens for this call
     std::string callRaw(const std::string& systemPrompt,
-                        const std::string& userMessage);
+                        const std::string& userMessage,
+                        int maxTokensOverride = 0);
 
     // Stats
     int totalCalls() const { return totalCalls_; }
@@ -40,6 +44,8 @@ public:
 private:
     std::string callAnthropic(const std::string& systemPrompt,
                                const std::string& userMessage);
+    std::string callOpenAI(const std::string& systemPrompt,
+                            const std::string& userMessage);
     std::string callOllama(const std::string& systemPrompt,
                             const std::string& userMessage);
 

@@ -23,6 +23,7 @@ const CONFIG_FIELDS = [
   'console_type', 'console_ip', 'console_port',
   'dsp_interval_ms', 'llm_interval_ms', 'meter_refresh_ms',
   'approval_mode', 'headless',
+  'anthropic_model', 'openai_model',
   'llm_temperature', 'llm_max_tokens',
   'ollama_primary', 'ollama_host', 'ollama_model',
   'audio_channels', 'audio_device_id', 'audio_sample_rate', 'audio_fft_size',
@@ -30,7 +31,7 @@ const CONFIG_FIELDS = [
 ];
 
 const ENV_FIELDS = [
-  'ANTHROPIC_API_KEY', 'MIXAGENT_MODEL', 'MIXAGENT_LOG_LEVEL'
+  'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'MIXAGENT_LOG_LEVEL'
 ];
 
 function populateConfig(data) {
@@ -766,6 +767,198 @@ window.mixagent.demo.onStopped(() => {
   setDemoState(false);
   showToast('Demo finished');
 });
+
+// ── OSC Test Panel ───────────────────────────────────────────
+
+function updateOscParamUI() {
+  const param = $('#osc-param').value;
+  const bandLabel = $('#osc-band-label');
+  const auxLabel = $('#osc-aux-label');
+  const customLabel = $('#osc-custom-label');
+  const valueLabel = $('#osc-value-label');
+  const dbLabel = $('#osc-db-label');
+  const hint = $('#osc-value-hint');
+
+  bandLabel.style.display = param.startsWith('eq_') ? '' : 'none';
+  auxLabel.style.display = param === 'send' ? '' : 'none';
+  customLabel.style.display = param === 'custom' ? '' : 'none';
+
+  const noValue = param === 'mute' || param === 'unmute';
+  valueLabel.style.display = noValue ? 'none' : '';
+
+  const hints = {
+    fader: 'X32 fader: 0.0 = -inf, 0.5 = -10dB, 0.75 = 0dB, 1.0 = +10dB',
+    mute: 'Sends mix/on = 0 (muted)',
+    unmute: 'Sends mix/on = 1 (unmuted)',
+    pan: '0.0 = full left, 0.5 = center, 1.0 = full right',
+    eq_gain: 'Normalized 0.0-1.0 (maps to -15dB to +15dB)',
+    eq_freq: 'Normalized 0.0-1.0 (maps to 20Hz-20kHz log scale)',
+    eq_q: 'Normalized 0.0-1.0 (maps to 10-0.3 Q)',
+    comp_thresh: 'Normalized 0.0-1.0 (maps to -60dB to 0dB)',
+    comp_ratio: 'Normalized 0.0-1.0 (maps to 1:1 to inf:1)',
+    hpf: 'Normalized 0.0-1.0 (maps to 20Hz-400Hz)',
+    send: 'Normalized 0.0-1.0 fader level',
+    custom: 'Enter raw OSC address and float value',
+  };
+  hint.textContent = hints[param] || '';
+
+  const showDb = $('#osc-show-db').checked && param === 'fader';
+  dbLabel.style.display = showDb ? '' : 'none';
+  if (showDb) valueLabel.style.display = 'none';
+}
+
+$('#osc-param').addEventListener('change', updateOscParamUI);
+$('#osc-show-db').addEventListener('change', updateOscParamUI);
+
+function dbToFaderFloat(db) {
+  if (db <= -90) return 0.0;
+  if (db >= 10) return 1.0;
+  if (db < -60) return (db + 90) / 30 * 0.0625;
+  if (db < -30) return 0.0625 + (db + 60) / 30 * 0.1875;
+  if (db < -10) return 0.25 + (db + 30) / 20 * 0.25;
+  return 0.5 + (db + 10) / 20 * 0.5;
+}
+
+function faderFloatToDb(f) {
+  if (f <= 0) return -Infinity;
+  if (f >= 1) return 10;
+  if (f < 0.0625) return -90 + f / 0.0625 * 30;
+  if (f < 0.25) return -60 + (f - 0.0625) / 0.1875 * 30;
+  if (f < 0.5) return -30 + (f - 0.25) / 0.25 * 20;
+  return -10 + (f - 0.5) / 0.5 * 20;
+}
+
+function appendOscLog(text, type) {
+  const log = $('#osc-log');
+  const line = document.createElement('span');
+  if (type === 'error') line.className = 'log-error';
+  if (type === 'sent') line.style.color = 'var(--blue, #5b9)';
+  if (type === 'received') line.style.color = 'var(--green, #5b9)';
+  const ts = new Date().toLocaleTimeString();
+  line.textContent = `[${ts}] ${text}\n`;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+$('#btn-osc-send').addEventListener('click', async () => {
+  const channel = parseInt($('#osc-channel').value) || 1;
+  const param = $('#osc-param').value;
+  const band = parseInt($('#osc-band').value) || 1;
+  const aux = parseInt($('#osc-aux').value) || 1;
+  const customAddr = param === 'custom' ? $('#osc-custom-addr').value : null;
+
+  let value;
+  if ($('#osc-show-db').checked && param === 'fader') {
+    const db = parseFloat($('#osc-db-value').value);
+    if (isNaN(db)) { showToast('Enter a valid dB value', 'error'); return; }
+    value = dbToFaderFloat(db);
+    appendOscLog(`Converting ${db} dB -> ${value.toFixed(4)} normalized`, 'sent');
+  } else if (param !== 'mute' && param !== 'unmute') {
+    value = parseFloat($('#osc-value').value);
+    if (isNaN(value)) { showToast('Enter a valid value', 'error'); return; }
+  }
+
+  appendOscLog(`SEND ch${channel} ${param} = ${value ?? '(toggle)'}`, 'sent');
+
+  const res = await window.mixagent.oscTest.send({ channel, param, value, band, aux, customAddr });
+  if (res.ok) {
+    let msg = `OK: ${res.address}`;
+    if (res.echo) {
+      msg += ` -> echo: ${JSON.stringify(res.echo.values)}`;
+    } else if (res.note) {
+      msg += ` (${res.note})`;
+    }
+    appendOscLog(msg, 'received');
+  } else {
+    appendOscLog(`ERROR: ${res.error}`, 'error');
+  }
+});
+
+$('#btn-osc-query').addEventListener('click', async () => {
+  const channel = parseInt($('#osc-channel').value) || 1;
+  const param = $('#osc-param').value;
+  const band = parseInt($('#osc-band').value) || 1;
+  const aux = parseInt($('#osc-aux').value) || 1;
+  const customAddr = param === 'custom' ? $('#osc-custom-addr').value : null;
+
+  appendOscLog(`QUERY ch${channel} ${param}`, 'sent');
+
+  const res = await window.mixagent.oscTest.query({ channel, param, band, aux, customAddr });
+  if (res.ok) {
+    let msg = `${res.address} = ${JSON.stringify(res.values)}`;
+    if (param === 'fader' && res.values.length > 0) {
+      const db = faderFloatToDb(res.values[0]);
+      msg += ` (${db === -Infinity ? '-inf' : db.toFixed(1)} dB)`;
+    }
+    appendOscLog(msg, 'received');
+  } else {
+    appendOscLog(`ERROR: ${res.error}`, 'error');
+  }
+});
+
+$$('.osc-quick').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const channel = parseInt($('#osc-channel').value) || 1;
+    const action = btn.dataset.action;
+
+    let opts = { channel };
+    switch (action) {
+      case 'mute':         opts.param = 'mute'; break;
+      case 'unmute':       opts.param = 'unmute'; break;
+      case 'fader-unity':  opts.param = 'fader'; opts.value = 0.75; break;
+      case 'fader-off':    opts.param = 'fader'; opts.value = 0.0; break;
+      case 'fader-minus10':opts.param = 'fader'; opts.value = 0.5; break;
+      case 'hpf-80':       opts.param = 'hpf'; opts.value = 0.293; break;
+      case 'hpf-120':      opts.param = 'hpf'; opts.value = 0.370; break;
+      case 'pan-center':   opts.param = 'pan'; opts.value = 0.5; break;
+      case 'query-all': {
+        appendOscLog(`--- Query all params for ch${channel} ---`, 'sent');
+        for (const p of ['fader', 'mute', 'pan', 'hpf']) {
+          const r = await window.mixagent.oscTest.query({ channel, param: p });
+          if (r.ok) {
+            let msg = `${r.address} = ${JSON.stringify(r.values)}`;
+            if (p === 'fader' && r.values.length > 0) {
+              const db = faderFloatToDb(r.values[0]);
+              msg += ` (${db === -Infinity ? '-inf' : db.toFixed(1)} dB)`;
+            }
+            if (p === 'mute' && r.values.length > 0) {
+              msg += ` (${r.values[0] === 1 ? 'unmuted' : 'MUTED'})`;
+            }
+            appendOscLog(msg, 'received');
+          } else {
+            appendOscLog(`${p}: ${r.error}`, 'error');
+          }
+        }
+        for (let b = 1; b <= 4; b++) {
+          const r = await window.mixagent.oscTest.query({ channel, param: 'eq_gain', band: b });
+          if (r.ok) appendOscLog(`${r.address} = ${JSON.stringify(r.values)}`, 'received');
+        }
+        return;
+      }
+    }
+
+    if (action !== 'query-all') {
+      appendOscLog(`QUICK: ch${channel} ${action}`, 'sent');
+      const res = await window.mixagent.oscTest.send(opts);
+      if (res.ok) {
+        appendOscLog(`OK: ${res.address}`, 'received');
+      } else {
+        appendOscLog(`ERROR: ${res.error}`, 'error');
+      }
+    }
+  });
+});
+
+$('#btn-osc-clear').addEventListener('click', () => {
+  while ($('#osc-log').firstChild) $('#osc-log').removeChild($('#osc-log').firstChild);
+});
+
+window.mixagent.oscTest.onResponse((data) => {
+  const dir = data.direction === 'sent' ? '->' : '<-';
+  appendOscLog(`${dir} ${data.address} [${data.typeTag}] ${JSON.stringify(data.values)} (${data.target || data.source})`, data.direction);
+});
+
+updateOscParamUI();
 
 // ── Init ─────────────────────────────────────────────────────────────
 (async function init() {
